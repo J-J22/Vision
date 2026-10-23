@@ -5,6 +5,7 @@ import { config } from "./config";
 import { planTasks, type Endpoint } from "./agents/planner";
 import { runCoder } from "./agents/coders";
 import { reviewFailures, writeTests, type EdgeTest } from "./agents/qa";
+import { provePlantedBugs, type PlantedBug } from "./proof";
 import { buildFrontend, createWorkspace, readWorkspace, runTests, startApp, validateFiles, writeFiles } from "./sandbox";
 import type { Blueprint, BuildEvent, Minutes, Task, TestResult } from "./types";
 
@@ -20,6 +21,7 @@ export type Build = {
   listeners: Set<(e: BuildEvent) => void>;
   notes: { agent: string; text: string }[];
   previewUrl?: string;
+  proof?: PlantedBug[]; // planted bugs and whether the tests caught them
 };
 
 const MAX_PARALLEL = 2;
@@ -186,9 +188,28 @@ async function run(build: Build) {
 
     const passed = results?.filter((r) => r.passed).length ?? 0;
     const total = results?.length ?? 0;
-    setTask(build, qa, passed === total ? "done" : "failed");
     say(build, "qa", `${passed} of ${total} edge-case tests pass.`);
-    emit(build, { type: "status", status: "done", detail: `${passed}/${total} tests passing` });
+
+    // Proof the tests mean something: plant typical bugs one at a time and see whether the tests catch them
+    let proofText = "";
+    if (total && passed === total && !config.fakeAgents) {
+      say(build, "qa", "Now testing the tests: I'll plant typical bugs one at a time and check that the tests catch each one.");
+      const proof = await provePlantedBugs(build.id, build.tests, (bug) =>
+        say(build, "qa", `${bug.caught ? "Caught" : "Missed"}: ${bug.what} (${bug.file})${bug.caught && bug.by ? `, by "${bug.by}"` : ""}.`),
+      );
+      build.proof = proof.bugs;
+      if (proof.url) {
+        build.previewUrl = proof.url;
+        emit(build, { type: "preview", url: proof.url });
+      }
+      const caught = proof.bugs.filter((b) => b.caught).length;
+      if (proof.bugs.length) {
+        proofText = ` · caught ${caught}/${proof.bugs.length} planted bugs`;
+        say(build, "qa", `The tests caught ${caught} of ${proof.bugs.length} planted bugs. The real code is back in place.`);
+      }
+    }
+    setTask(build, qa, passed === total ? "done" : "failed");
+    emit(build, { type: "status", status: "done", detail: `${passed}/${total} tests passing${proofText}` });
   } catch (err) {
     console.error("[runner]", err);
     emit(build, { type: "status", status: "failed", detail: String(err instanceof Error ? err.message : err) });

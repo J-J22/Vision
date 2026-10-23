@@ -9,7 +9,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { JSDOM, VirtualConsole } from "jsdom";
 
-const [base = "http://localhost:4000", testsFile, publicDir] = process.argv.slice(2);
+const [base = "http://localhost:4000", testsFile, publicDir, mode] = process.argv.slice(2);
+const apiOnly = mode === "api"; // skip the (slow) browser checks
 const runId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const serverErrors = [];
 
@@ -72,7 +73,7 @@ async function runSteps(steps) {
 // Catches pages that crash in the browser (white screens), which API tests can't see.
 
 const srcPages = publicDir ? join(publicDir, "..", "src", "pages") : "";
-const reactPages = srcPages && existsSync(srcPages)
+const reactPages = !apiOnly && srcPages && existsSync(srcPages)
   ? readdirSync(srcPages)
       .filter((f) => f.endsWith(".jsx"))
       .map((file) => {

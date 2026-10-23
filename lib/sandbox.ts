@@ -241,14 +241,15 @@ export async function startApp(id: string): Promise<{ url: string }> {
 }
 
 // Runs the QA agent's tests (saved beside the app, out of the agents' reach) plus the built-in smoke tests
-export async function runTests(id: string, url: string, tests: unknown[]): Promise<TestResult[]> {
+export async function runTests(id: string, url: string, tests: unknown[], mode: "all" | "api" = "all"): Promise<TestResult[]> {
   const file = join(workspacePath(id), ".vision-tests.json");
   writeFileSync(file, JSON.stringify(tests, null, 1));
   return new Promise((res, rej) => {
-    const proc = spawn(process.execPath, [TESTS, url, file, join(workspacePath(id), "web", "dist")], { stdio: ["ignore", "pipe", "pipe"] });
+    const proc = spawn(process.execPath, [TESTS, url, file, join(workspacePath(id), "web", "dist"), mode], { stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     let err = "";
-    const timer = setTimeout(() => proc.kill(), 60000);
+    // Browser checks take ~2s per page
+    const timer = setTimeout(() => proc.kill(), 150_000);
     proc.stdout.on("data", (c) => (out += c));
     proc.stderr.on("data", (c) => (err += c));
     proc.on("exit", () => {
