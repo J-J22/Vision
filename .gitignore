@@ -8,3 +8,6 @@ __pycache__/
 dist/
 build/
 workspaces/
+.next/
+next-env.d.ts
+*.tsbuildinfo

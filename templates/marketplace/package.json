@@ -1,0 +1,8 @@
+{
+  "name": "vision-marketplace-template",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "express": "4.21.2" }
+}
