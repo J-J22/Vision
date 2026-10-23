@@ -2,6 +2,7 @@
 // Council arena: watch five AI seats debate the plan live (crossexam: sealed proposals → cross-examination → consensus)
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Shell } from "@/components/Shell";
 import { Avatar, Typing } from "@/components/Avatar";
 import { look, SEAT_ORDER } from "@/components/agents";
@@ -43,6 +44,7 @@ function Turn({ m }: { m: CouncilMessage }) {
 export default function Council({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { project: p, problem, act } = useProject(id);
+  const router = useRouter();
   const [picked, setPicked] = useState<number | null>(null);
   const logEnd = useRef<HTMLDivElement>(null);
   const r = p ? p.rounds[(picked ?? p.rounds.length) - 1] : undefined;
@@ -50,6 +52,18 @@ export default function Council({ params }: { params: Promise<{ id: string }> })
   useEffect(() => {
     logEnd.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [r?.messages.length, r?.speaking]);
+
+  // Watched a round finish and it has questions for the user: show the score briefly, then go answer them
+  const wasLive = useRef(false);
+  useEffect(() => {
+    if (!p) return;
+    const running = p.rounds.at(-1)?.status === "running";
+    if (wasLive.current && !running && p.stage === "discovery" && p.queue.length > p.queueIndex) {
+      const t = setTimeout(() => router.push(`/p/${id}/discovery`), 3000);
+      return () => clearTimeout(t);
+    }
+    wasLive.current = running;
+  }, [p, id, router]);
 
   if (!p) return <Shell project={null} page="council">{problem ? <div className="error-box">{problem}</div> : <p className="muted">Loading…</p>}</Shell>;
   if (!r) {

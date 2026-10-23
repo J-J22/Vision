@@ -133,9 +133,13 @@ async function resolvePref(pref: Pref): Promise<Part | null> {
 export async function recommended(slot: string): Promise<Part[]> {
   const def = slotDef(slot);
   if (!def) return [];
-  const parts = await Promise.all(def.prefer.map(resolvePref));
-  return dedupe(parts.filter((p): p is Part => Boolean(p)));
+  const parts = dedupe((await Promise.all(def.prefer.map(resolvePref))).filter((p): p is Part => Boolean(p)));
+  // Last resort only: tested 2026-10-24, NVIDIA's free DeepSeek/GLM/gpt-oss gave no answer within 45s
+  // and Kimi K2.6 wasn't served, so putting it first cost every call 45s before a spare took over
+  return [...parts.filter((p) => !SLOW_PROVIDERS.has(p.provider)), ...parts.filter((p) => SLOW_PROVIDERS.has(p.provider))];
 }
+
+const SLOW_PROVIDERS = new Set<string>(["nvidia"]);
 
 function dedupe(parts: Part[]): Part[] {
   const seen = new Set<string>();
