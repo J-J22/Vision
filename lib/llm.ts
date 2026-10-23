@@ -80,9 +80,26 @@ function parseWait(value: string | null): number | null {
 
 // ---------- raw call ----------
 
-async function chat(model: string, messages: Message[], temperature: number, maxTokens: number, json = true): Promise<string> {
+// ---------- daily limits: switch models instead of waiting ----------
+
+// Models that used up their daily allowance, and when they're usable again
+const gd = globalThis as unknown as { __visionExhausted?: Map<string, number> };
+const exhausted: Map<string, number> = (gd.__visionExhausted ??= new Map());
+
+// The model to use instead of `model` while it's out for the day: the first available one in the fallback order
+function available(model: string): string {
+  const until = exhausted.get(model);
+  if (!until || until < Date.now()) return model;
+  const next = config.fallbackOrder.find((m) => m !== model && (exhausted.get(m) ?? 0) < Date.now());
+  if (!next) throw new Error("Every Groq model has used up its daily allowance. Wait until they reset, use another person's own Groq key, or upgrade the Groq plan.");
+  return next;
+}
+
+async function chat(requested: string, messages: Message[], temperature: number, maxTokens: number, json = true): Promise<string> {
   if (!config.groqKey) throw new Error("GROQ_API_KEY is not set. Copy .env.example to .env.local and add your key.");
 
+  let model = available(requested);
+  if (model !== requested) console.warn(`[llm] ${requested} is out of daily tokens, using ${model}`);
   for (let attempt = 0; attempt < 8; attempt++) {
     const booking = await reserve(model, estimateTokens(messages.map((m) => m.content).join("\n")) + maxTokens);
     let res: Response;
@@ -111,6 +128,19 @@ async function chat(model: string, messages: Message[], temperature: number, max
       continue;
     }
 
+    if (res.status === 429) {
+      // A daily limit (tokens or requests per day) won't clear for minutes or hours: switch models now
+      const body = await res.clone().text();
+      if (/per day|\(TPD\)|\(RPD\)/i.test(body)) {
+        booking.tokens = 0;
+        const wait = parseWait(res.headers.get("retry-after")) ?? 3_600_000;
+        exhausted.set(model, Date.now() + wait);
+        const next = available(model);
+        console.warn(`[llm] ${model} hit its daily limit (back in ~${Math.round(wait / 60000)} min), switching to ${next}`);
+        model = next;
+        continue;
+      }
+    }
     if (res.status === 429 || res.status >= 500) {
       const wait =
         parseWait(res.headers.get("retry-after")) ??
