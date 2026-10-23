@@ -13,4 +13,5 @@ Built for a 24-hour hackathon. The first test case is a marketplace app.
 ## Docs
 
 - [15-hour build plan](PLAN.md): scope, architecture, contracts, who does what
+- [Build night plan by person](docs/build-plan.html): open in a browser
 - [Project plan](docs/plan.html): open in a browser

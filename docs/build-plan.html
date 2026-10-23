@@ -1,0 +1,430 @@
+<title>Vision Build Night</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: overview strip, then one lane per developer with timed task blocks; shared rules at the end */
+:root {
+  --bg: #f6f8f8;
+  --surface: #ffffff;
+  --fg: #142322;
+  --muted: #566a68;
+  --line: #d9e2e1;
+  --accent: #0d6b66;
+  --accent-soft: #e2f1ef;
+  --a: #0d6b66; --a-soft: #e2f1ef;
+  --b: #3a56a8; --b-soft: #e6ebf8;
+  --c: #9a5b00; --c-soft: #fbf0dc;
+  --flag: #a33a2c; --flag-soft: #f9e6e2;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Manrope", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1716; --surface: #16211f; --fg: #e3ecea; --muted: #93a8a5; --line: #283735;
+    --accent: #5cc4bb; --accent-soft: #173533;
+    --a: #5cc4bb; --a-soft: #173533; --b: #94aef0; --b-soft: #1c2440; --c: #e9b35c; --c-soft: #3a2c13;
+    --flag: #ef9585; --flag-soft: #3b1d18; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1716; --surface: #16211f; --fg: #e3ecea; --muted: #93a8a5; --line: #283735;
+  --accent: #5cc4bb; --accent-soft: #173533;
+  --a: #5cc4bb; --a-soft: #173533; --b: #94aef0; --b-soft: #1c2440; --c: #e9b35c; --c-soft: #3a2c13;
+  --flag: #ef9585; --flag-soft: #3b1d18; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 80px;
+}
+.wrap { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2rem, 5vw, 2.8rem); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.5rem; font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 600; }
+p { margin: 0; max-width: 65ch; }
+code { font-family: var(--font-mono); font-size: 0.85em; }
+a { color: var(--accent); }
+.eyebrow { font-family: var(--font-mono); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); font-weight: 500; }
+.muted { color: var(--muted); }
+section { display: flex; flex-direction: column; gap: 16px; }
+
+header { display: flex; flex-direction: column; gap: 14px; }
+.goal { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; }
+.goal .flow { font-size: 0.95rem; }
+.goal .flow span { white-space: nowrap; }
+
+/* Checkpoint timeline */
+.timeline { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; font-variant-numeric: tabular-nums; }
+.tick { border-top: 3px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tick b { font-family: var(--font-mono); font-size: 0.82rem; font-weight: 500; }
+.tick span { font-size: 0.82rem; color: var(--muted); line-height: 1.4; }
+.tick.key { border-top-color: var(--flag); }
+.tick.key b { color: var(--flag); }
+.tick.past { opacity: 0.55; }
+.tick.now { border-top-color: var(--accent); }
+.tick.now b::after { content: " · now"; color: var(--accent); }
+
+/* Person filter */
+.filter { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--line); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.filter button {
+  font: 600 0.88rem var(--font-body); color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer;
+}
+.filter button:hover { border-color: var(--muted); }
+.filter button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.filter button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+/* Person lanes */
+.lane { --p: var(--a); --p-soft: var(--a-soft); display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 70px; }
+.lane.b { --p: var(--b); --p-soft: var(--b-soft); }
+.lane.c { --p: var(--c); --p-soft: var(--c-soft); }
+.lane-head { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; background: var(--p-soft); border-radius: 10px; }
+.lane-head .who { font-family: var(--font-mono); font-size: 0.76rem; color: var(--p); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
+.owns { display: flex; flex-wrap: wrap; gap: 6px; }
+.owns code { background: var(--surface); border-radius: 4px; padding: 2px 7px; font-size: 0.78rem; }
+.progress { font-family: var(--font-mono); font-size: 0.78rem; color: var(--p); }
+
+.block { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.block:last-child { border-bottom: 0; }
+.block .time { font-family: var(--font-mono); font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.block.now .time { color: var(--p); font-weight: 500; }
+.block.now .time::after { content: "now"; display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.block .body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tasks label { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; font-size: 0.94rem; cursor: pointer; }
+.tasks input { margin: 4px 0 0; accent-color: var(--p); width: 16px; height: 16px; }
+.tasks input:checked + span { color: var(--muted); text-decoration: line-through; }
+.check { background: var(--flag-soft); border-radius: 6px; padding: 10px 12px; font-size: 0.9rem; }
+.check b { color: var(--flag); font-family: var(--font-mono); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; display: block; }
+.together { font-size: 0.9rem; color: var(--muted); font-style: italic; }
+
+/* Shared */
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.panel ol, .panel ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 0.94rem; }
+.panel li::marker { color: var(--accent); }
+
+footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 18px; }
+
+@media (max-width: 720px) {
+  .timeline { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 14px; }
+  .grid2 { grid-template-columns: 1fr; }
+  .block { grid-template-columns: 1fr; gap: 6px; }
+  body { padding-block: 28px 56px; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">Vision · hackathon build night</span>
+  <h1>Who builds what, hour by hour</h1>
+  <p class="muted">16:00 → 07:00. Three developers, models on Groq. Full details and the shared data formats are in <code>PLAN.md</code> in the repo.</p>
+  <div class="goal">
+    <span class="eyebrow">The one goal: working end to end by 01:00</span>
+    <p class="flow"><span>Chat →</span> <span>Discovery asks about you →</span> <span>Blueprint fills in →</span> <span>Approve →</span> <span>task list →</span> <span>agents write code →</span> <span>tests run →</span> <span>marketplace opens</span></p>
+  </div>
+</header>
+
+<section>
+  <span class="eyebrow">Checkpoints</span>
+  <div class="timeline" id="timeline">
+    <div class="tick" data-at="960"><b>16:00</b><span>Kickoff, agree data formats</span></div>
+    <div class="tick" data-at="1020"><b>17:00</b><span>Everyone's setup works</span></div>
+    <div class="tick key" data-at="1260"><b>21:00</b><span>Each part works alone</span></div>
+    <div class="tick key" data-at="1500"><b>01:00</b><span>Full flow works together</span></div>
+    <div class="tick key" data-at="1680"><b>04:00</b><span>Feature freeze</span></div>
+    <div class="tick" data-at="1770"><b>05:30</b><span>Pitch prep, 07:00 submit</span></div>
+  </div>
+</section>
+
+<nav class="filter" aria-label="Show plan for">
+  <button type="button" id="f-all" data-show="all" aria-pressed="true">Everyone</button>
+  <button type="button" id="f-deva" data-show="deva" aria-pressed="false">Dev A · Models &amp; agents</button>
+  <button type="button" id="f-devb" data-show="devb" aria-pressed="false">Dev B · Discovery &amp; UI</button>
+  <button type="button" id="f-devc" data-show="devc" aria-pressed="false">Dev C · Template &amp; tests</button>
+</nav>
+
+<!-- Dev A -->
+<section class="lane a" id="deva">
+  <div class="lane-head">
+    <span class="who">Dev A · Groq owner</span>
+    <h2>Models &amp; agents</h2>
+    <p>Makes the AI calls reliable and writes the agents that turn a Blueprint into code.</p>
+    <div class="owns"><code>lib/llm.ts</code><code>lib/agents/planner.ts</code><code>lib/agents/backend.ts</code><code>lib/agents/frontend.ts</code><code>lib/agents/qa.ts</code><code>lib/runner.ts</code></div>
+    <span class="progress" data-progress></span>
+  </div>
+  <div>
+    <div class="block" data-from="960" data-to="1020"><div class="time">16:00–17:00</div><div class="body">
+      <h3>Groq wrapper</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="a1"><span>Groq API key in <code>.env.local</code>, first call succeeds</span></label></li>
+        <li><label><input type="checkbox" id="a2"><span><code>callLLM({ model, system, messages, schema })</code> returns JSON checked against a schema</span></label></li>
+        <li><label><input type="checkbox" id="a3"><span>On bad JSON, retry once with the error. On a rate-limit error (429), wait and retry.</span></label></li>
+        <li><label><input type="checkbox" id="a4"><span>Pick a big model (planner, backend) and a small fast one (Discovery, QA); put both names in config</span></label></li>
+      </ul>
+    </div></div>
+    <div class="block" data-from="1020" data-to="1260"><div class="time">17:00–21:00</div><div class="body">
+      <h3>Agent prompts</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="a5"><span>Write <code>lib/sample-blueprint.json</code> (a textbook marketplace) to test against</span></label></li>
+        <li><label><input type="checkbox" id="a6"><span>Planner: Blueprint → list of tasks with owners and dependencies</span></label></li>
+        <li><label><input type="checkbox" id="a7"><span>Backend: Express routes + SQLite tables, built on the template</span></label></li>
+        <li><label><input type="checkbox" id="a8"><span>Frontend: HTML pages that call the API</span></label></li>
+        <li><label><input type="checkbox" id="a9"><span>QA: picks tests from Dev C's edge-case list; reports failures</span></label></li>
+        <li><label><input type="checkbox" id="a10"><span>Every agent returns <code>{ files, note }</code>; the note is a message to the other agents</span></label></li>
+      </ul>
+      <div class="check"><b>21:00 checkpoint</b>Code from the backend agent, written to disk by Dev C's sandbox, starts and answers a request.</div>
+    </div></div>
+    <div class="block" data-from="1260" data-to="1290"><div class="time">21:00–21:30</div><div class="body"><p class="together">Sync with the team, eat, merge.</p></div></div>
+    <div class="block" data-from="1290" data-to="1500"><div class="time">21:30–01:00</div><div class="body">
+      <h3>The runner</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="a11"><span>Run every task whose dependencies are done, at most 2 at a time</span></label></li>
+        <li><label><input type="checkbox" id="a12"><span>Give each agent only its Blueprint slice, the files it needs and the other agents' notes</span></label></li>
+        <li><label><input type="checkbox" id="a13"><span>Send <code>task</code> and <code>message</code> events to the UI as each task changes</span></label></li>
+      </ul>
+      <div class="check"><b>01:00 checkpoint · whole team</b>Approve a Blueprint and get a running marketplace, with no hand-fixing.</div>
+    </div></div>
+    <div class="block" data-from="1500" data-to="1680"><div class="time">01:00–04:00</div><div class="body">
+      <h3>Fix loop and tuning</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="a14"><span>Failed test → new fix task for the agent that owns that code, with the error attached (1 retry)</span></label></li>
+        <li><label><input type="checkbox" id="a15"><span>Run the full build 5+ times; fix the prompts behind the most common failures</span></label></li>
+      </ul>
+    </div></div>
+    <div class="block" data-from="1680" data-to="1770"><div class="time">04:00–05:30</div><div class="body"><p class="together">Feature freeze. Run the full demo 3 times with the team. Fix crashes only.</p></div></div>
+    <div class="block" data-from="1770" data-to="1860"><div class="time">05:30–07:00</div><div class="body"><p class="together">Explain the agent system in the pitch. Sleep in turns.</p></div></div>
+  </div>
+</section>
+
+<!-- Dev B -->
+<section class="lane b" id="devb">
+  <div class="lane-head">
+    <span class="who">Dev B</span>
+    <h2>Discovery &amp; UI</h2>
+    <p>Owns everything the user sees: the Discovery chat, the live Blueprint and the build screen.</p>
+    <div class="owns"><code>lib/types.ts</code><code>app/discovery</code><code>app/build</code><code>app/api/discovery</code><code>lib/agents/discovery.ts</code></div>
+    <span class="progress" data-progress></span>
+  </div>
+  <div>
+    <div class="block" data-from="960" data-to="1020"><div class="time">16:00–17:00</div><div class="body">
+      <h3>Project scaffold</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="b1"><span>Create the Next.js app (TypeScript) in the repo and push it so others can start</span></label></li>
+        <li><label><input type="checkbox" id="b2"><span>Copy the shared types from <code>PLAN.md</code> into <code>lib/types.ts</code></span></label></li>
+        <li><label><input type="checkbox" id="b3"><span>Empty layouts for <code>/discovery</code> (chat left, Blueprint right) and <code>/build</code></span></label></li>
+      </ul>
+    </div></div>
+    <div class="block" data-from="1020" data-to="1260"><div class="time">17:00–21:00</div><div class="body">
+      <h3>Discovery</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="b4"><span>Prompt opens with 3–4 questions about the user, then sets their level: beginner, some tech, developer</span></label></li>
+        <li><label><input type="checkbox" id="b5"><span>Then walks the coverage checklist: users, features, pages, data, API, login, payments, scale, hosting</span></label></li>
+        <li><label><input type="checkbox" id="b6"><span>Words each question for the user's level, offers choices and marks the recommended one</span></label></li>
+        <li><label><input type="checkbox" id="b7"><span>Each turn returns <code>{ reply, blueprintPatch, coverage, done }</code>; skipped topics become written-down defaults</span></label></li>
+        <li><label><input type="checkbox" id="b8"><span>Chat UI with clickable answer options; Blueprint panel and checklist update live</span></label></li>
+      </ul>
+      <div class="check"><b>21:00 checkpoint</b>Answering as a non-technical user gives a complete Blueprint in 10 turns or fewer.</div>
+    </div></div>
+    <div class="block" data-from="1260" data-to="1290"><div class="time">21:00–21:30</div><div class="body"><p class="together">Sync with the team, eat, merge.</p></div></div>
+    <div class="block" data-from="1290" data-to="1500"><div class="time">21:30–01:00</div><div class="body">
+      <h3>Build screen</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="b9"><span>Approve button sends the Blueprint to <code>/api/build</code> and opens <code>/build</code></span></label></li>
+        <li><label><input type="checkbox" id="b10"><span>Task board (waiting, running, done, failed) driven by the live event stream</span></label></li>
+        <li><label><input type="checkbox" id="b11"><span>Agent feed showing the notes agents leave each other, plus test results and the preview link</span></label></li>
+      </ul>
+      <div class="check"><b>01:00 checkpoint · whole team</b>Approve a Blueprint and get a running marketplace, with no hand-fixing.</div>
+    </div></div>
+    <div class="block" data-from="1500" data-to="1680"><div class="time">01:00–04:00</div><div class="body">
+      <h3>Polish</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="b12"><span>Level badge, coverage ticks, smooth streaming text (show off Groq's speed)</span></label></li>
+        <li><label><input type="checkbox" id="b13"><span>Clear loading and error states, so a failed call never shows a blank screen</span></label></li>
+      </ul>
+    </div></div>
+    <div class="block" data-from="1680" data-to="1770"><div class="time">04:00–05:30</div><div class="body"><p class="together">Feature freeze. Write the exact demo answers you'll type. Run the demo 3 times.</p></div></div>
+    <div class="block" data-from="1770" data-to="1860"><div class="time">05:30–07:00</div><div class="body"><p class="together">Drive the live demo in the pitch. Sleep in turns.</p></div></div>
+  </div>
+</section>
+
+<!-- Dev C -->
+<section class="lane c" id="devc">
+  <div class="lane-head">
+    <span class="who">Dev C</span>
+    <h2>Template, sandbox &amp; tests</h2>
+    <p>Gives the agents a working app to build on, a place to run it and the tests that try to break it.</p>
+    <div class="owns"><code>templates/marketplace</code><code>lib/sandbox.ts</code><code>tests/edge-cases</code><code>backup video</code></div>
+    <span class="progress" data-progress></span>
+  </div>
+  <div>
+    <div class="block" data-from="960" data-to="1020"><div class="time">16:00–17:00</div><div class="body">
+      <h3>Starter app</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="c1"><span><code>templates/marketplace</code>: Express + SQLite (<code>better-sqlite3</code>) + plain HTML in <code>public/</code></span></label></li>
+        <li><label><input type="checkbox" id="c2"><span>Simple login, one listings page, seed data; runs on the port in <code>PORT</code></span></label></li>
+        <li><label><input type="checkbox" id="c3"><span>Install packages once now, so nothing installs during the demo</span></label></li>
+      </ul>
+    </div></div>
+    <div class="block" data-from="1020" data-to="1260"><div class="time">17:00–21:00</div><div class="body">
+      <h3>Sandbox and edge-case tests</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="c4"><span><code>createWorkspace(id)</code> copies the template into <code>workspaces/&lt;id&gt;/</code> (link <code>node_modules</code>, don't copy it)</span></label></li>
+        <li><label><input type="checkbox" id="c5"><span><code>writeFiles</code>, <code>startApp</code> (free port, returns URL), <code>stopApp</code>, <code>runTests</code> (returns pass/fail per test)</span></label></li>
+        <li><label><input type="checkbox" id="c6"><span>~10 HTTP tests: double-buy of the last item, negative price, editing someone else's listing, empty fields, huge title, ordering while logged out, duplicate payment confirmation, emoji in search, refund twice, page out of range</span></label></li>
+      </ul>
+      <div class="check"><b>21:00 checkpoint</b>From code: create a workspace, start the app, run the tests and get pass/fail results as JSON.</div>
+    </div></div>
+    <div class="block" data-from="1260" data-to="1290"><div class="time">21:00–21:30</div><div class="body"><p class="together">Sync with the team, eat, merge.</p></div></div>
+    <div class="block" data-from="1290" data-to="1500"><div class="time">21:30–01:00</div><div class="body">
+      <h3>Connect to the runner</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="c7"><span>Runner calls the sandbox after each task; send <code>test</code> and <code>preview</code> events</span></label></li>
+        <li><label><input type="checkbox" id="c8"><span>Stop old app processes so ports don't run out after many builds</span></label></li>
+      </ul>
+      <div class="check"><b>01:00 checkpoint · whole team</b>Approve a Blueprint and get a running marketplace, with no hand-fixing.</div>
+    </div></div>
+    <div class="block" data-from="1500" data-to="1680"><div class="time">01:00–04:00</div><div class="body">
+      <h3>Demo moment and stretch</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="c9"><span>Make sure the double-buy test reliably catches a purchase that isn't wrapped in a database transaction</span></label></li>
+        <li><label><input type="checkbox" id="c10"><span>Stretch: one-command deploy of a generated app (Render or Railway)</span></label></li>
+      </ul>
+    </div></div>
+    <div class="block" data-from="1680" data-to="1770"><div class="time">04:00–05:30</div><div class="body">
+      <h3>Backup</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="c11"><span>Record the best full demo run as a backup video in case Wi-Fi or Groq fails on stage</span></label></li>
+      </ul>
+    </div></div>
+    <div class="block" data-from="1770" data-to="1860"><div class="time">05:30–07:00</div><div class="body">
+      <h3>Submission</h3>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="c12"><span>README with setup steps and screenshots; pitch slides; make the repo public if the rules require it</span></label></li>
+      </ul>
+    </div></div>
+  </div>
+</section>
+
+<section id="shared">
+  <span class="eyebrow">Everyone</span>
+  <h2>Shared rules</h2>
+  <div class="grid2">
+    <div class="panel">
+      <h3>Working together</h3>
+      <ul>
+        <li>Agree on the types in <code>lib/types.ts</code> by 17:00, then don't change them without telling the others</li>
+        <li>Push small commits often; each person works in their own folders</li>
+        <li>Blocked for more than 20 minutes? Say so in the group chat</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>Groq limits</h3>
+      <ul>
+        <li>At most 2–3 model calls at once, because of per-minute rate limits</li>
+        <li>Short prompts: each agent gets only what it needs</li>
+        <li>Keep a fallback model name in config</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <h3>If behind at 01:00, cut in this order</h3>
+      <ol>
+        <li>Fix loop: just run tests and show results</li>
+        <li>Parallel agents: run tasks one at a time</li>
+        <li>Live preview: show files and passing tests</li>
+        <li>Never cut Discovery or the Blueprint</li>
+      </ol>
+    </div>
+    <div class="panel">
+      <h3>Demo script (3 minutes)</h3>
+      <ol>
+        <li>"A marketplace for second-hand textbooks." Answer as non-technical</li>
+        <li>Show a simple question with a recommended option; Blueprint fills in</li>
+        <li>Approve; agents leave each other notes on the task board</li>
+        <li>QA catches the double-buy bug, backend fixes it, test turns green</li>
+        <li>Open the marketplace and buy a book</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<footer>Your checkboxes are saved only in your own browser. Link straight to your part by adding <code>#deva</code>, <code>#devb</code> or <code>#devc</code> to the page link.</footer>
+
+</div>
+
+<script>
+(function () {
+  // Minutes since 16:00 tonight, in the viewer's local time; null outside the 16:00–07:00 window
+  function nightMinute() {
+    var d = new Date();
+    var m = d.getHours() * 60 + d.getMinutes();
+    var rel = (m - 960 + 1440) % 1440;
+    return rel <= 900 ? rel + 960 : null;
+  }
+  function markNow() {
+    var now = nightMinute();
+    document.querySelectorAll(".block").forEach(function (b) {
+      var on = now !== null && now >= +b.dataset.from && now < +b.dataset.to;
+      b.classList.toggle("now", on);
+    });
+    var ticks = Array.prototype.slice.call(document.querySelectorAll(".tick"));
+    ticks.forEach(function (t, i) {
+      var at = +t.dataset.at;
+      var next = ticks[i + 1] ? +ticks[i + 1].dataset.at : 1860;
+      t.classList.toggle("now", now !== null && now >= at && now < next);
+      t.classList.toggle("past", now !== null && now >= next);
+    });
+  }
+  markNow();
+  setInterval(markNow, 60000);
+
+  // Per-person filter
+  var buttons = document.querySelectorAll(".filter button");
+  var lanes = document.querySelectorAll(".lane");
+  function show(which) {
+    buttons.forEach(function (btn) { btn.setAttribute("aria-pressed", String(btn.dataset.show === which)); });
+    lanes.forEach(function (l) { l.hidden = which !== "all" && l.id !== which; });
+  }
+  buttons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      show(btn.dataset.show);
+      try { localStorage.setItem("vision-view", btn.dataset.show); } catch (e) {}
+    });
+  });
+  var hash = location.hash.replace("#", "");
+  var start = ["deva", "devb", "devc"].indexOf(hash) >= 0 ? hash : null;
+  if (!start) { try { start = localStorage.getItem("vision-view"); } catch (e) {} }
+  show(start && ["all", "deva", "devb", "devc"].indexOf(start) >= 0 ? start : "all");
+
+  // Checkboxes and progress, saved per viewer
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem("vision-checks") || "{}"); } catch (e) {}
+  function updateProgress() {
+    lanes.forEach(function (l) {
+      var boxes = l.querySelectorAll(".tasks input");
+      var done = l.querySelectorAll(".tasks input:checked").length;
+      l.querySelector("[data-progress]").textContent = done + " of " + boxes.length + " tasks done";
+    });
+  }
+  document.querySelectorAll(".tasks input").forEach(function (box) {
+    if (saved[box.id]) box.checked = true;
+    box.addEventListener("change", function () {
+      saved[box.id] = box.checked;
+      try { localStorage.setItem("vision-checks", JSON.stringify(saved)); } catch (e) {}
+      updateProgress();
+    });
+  });
+  updateProgress();
+})();
+</script>
