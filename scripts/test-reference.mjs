@@ -1,13 +1,16 @@
 // Proves the edge-case tests are correct: runs them against the hand-written reference API.
 import { cpSync, mkdtempSync, symlinkSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 
 const template = resolve("templates/marketplace");
 const dir = mkdtempSync(join(tmpdir(), "vision-ref-"));
-cpSync(template, dir, { recursive: true, filter: (src) => !src.includes("node_modules") && !src.includes("data.sqlite") });
-symlinkSync(join(template, "node_modules"), join(dir, "node_modules"), "dir");
+cpSync(template, dir, {
+  recursive: true,
+  filter: (src) => !relative(template, src).startsWith("node_modules") && !src.includes("data.sqlite"),
+});
+symlinkSync(join(template, "node_modules"), join(dir, "node_modules"), "junction");
 cpSync(resolve("tests/reference"), dir, { recursive: true });
 
 const port = 4999;

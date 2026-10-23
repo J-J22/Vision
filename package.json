@@ -12,7 +12,9 @@
     "setup": "npm install && npm install --prefix templates/marketplace",
     "models": "node scripts/list-models.mjs",
     "typecheck": "tsc --noEmit",
-    "test:reference": "node scripts/test-reference.mjs"
+    "test:reference": "node scripts/test-reference.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "predev": "node scripts/doctor.mjs --quick"
   },
   "dependencies": {
     "next": "^15.5.28",

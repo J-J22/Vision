@@ -12,14 +12,16 @@ Built for a 24-hour hackathon. The first app type is a marketplace.
 
 ## Run it
 
-Needs Node 22.13 or newer.
+Needs Node 22.13+ and Python 3.9+.
 
 ```bash
 npm run setup                 # installs Vision and the marketplace template
-cp .env.example .env.local    # then put your Groq key in .env.local
-npm run models                # optional: check which model names your key can use
+cp .env.example .env.local    # Windows: copy .env.example .env.local — then put your Groq key in it
+npm run doctor                # checks this PC and says exactly what to fix
 npm run dev                   # http://localhost:3000
 ```
+
+`npm run models` lists the models your Groq key can use.
 
 - **http://localhost:3000/discovery**: the full flow
 - **http://localhost:3000/build/sample**: skips Discovery and builds `lib/sample-blueprint.json`

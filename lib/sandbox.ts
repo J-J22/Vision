@@ -3,7 +3,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { dirname, join, normalize, resolve } from "node:path";
+import { dirname, join, posix, relative, resolve } from "node:path";
 import type { TestResult } from "./types";
 
 const ROOT = process.cwd();
@@ -40,15 +40,20 @@ export function createWorkspace(id: string) {
   mkdirSync(WORKSPACES, { recursive: true });
   cpSync(TEMPLATE, dir, {
     recursive: true,
-    filter: (src) => !src.includes(`${TEMPLATE}/node_modules`) && !src.includes("data.sqlite"),
+    filter: (src) => {
+      const rel = relative(TEMPLATE, src);
+      return !rel.startsWith("node_modules") && !rel.includes("data.sqlite");
+    },
   });
-  symlinkSync(join(TEMPLATE, "node_modules"), join(dir, "node_modules"), "dir");
+  // "junction" works on Windows without admin rights; other systems ignore the type
+  symlinkSync(join(TEMPLATE, "node_modules"), join(dir, "node_modules"), "junction");
   return dir;
 }
 
 // Returns the normalized path, or an error message if the agent may not write there
 export function checkPath(path: string): { ok: true; path: string } | { ok: false; error: string } {
-  const clean = normalize(path).replace(/^\.?\/+/, "");
+  // Agents always use forward slashes; normalize the same way on every OS
+  const clean = posix.normalize(path.replace(/\\/g, "/")).replace(/^\.?\/+/, "");
   if (clean.startsWith("..") || clean.includes("/../")) return { ok: false, error: `${path}: path leaves the app folder` };
   if (!WRITABLE.some((w) => clean.startsWith(w))) return { ok: false, error: `${path}: agents may only write to ${WRITABLE.join(", ")}` };
   if (PROTECTED.has(clean)) return { ok: false, error: `${path}: this starter file must not be changed` };

@@ -9,13 +9,13 @@ export const config = {
   groqKey: process.env.GROQ_API_KEY ?? "",
   groqBaseUrl: process.env.GROQ_BASE_URL ?? "https://api.groq.com/openai/v1",
   models: {
-    big: process.env.GROQ_MODEL_BIG ?? "llama-3.3-70b-versatile",
-    small: process.env.GROQ_MODEL_SMALL ?? "llama-3.1-8b-instant",
+    big: process.env.GROQ_MODEL_BIG ?? "openai/gpt-oss-120b",
+    small: process.env.GROQ_MODEL_SMALL ?? "openai/gpt-oss-20b",
     parliament: list(process.env.GROQ_PARLIAMENT_MODELS, [
-      "llama-3.3-70b-versatile",
       "openai/gpt-oss-120b",
-      "qwen/qwen3-32b",
-      "llama-3.1-8b-instant",
+      "qwen/qwen3.8-27b",
+      "openai/gpt-oss-20b",
+      "qwen/qwen3.8-27b",
     ]),
   },
   concurrency: Number(process.env.LLM_CONCURRENCY ?? 3),
