@@ -1,0 +1,43 @@
+{
+  "user": { "role": "Student", "level": "beginner", "goal": "A demo or hackathon" },
+  "app": {
+    "name": "ShelfSwap",
+    "type": "marketplace",
+    "summary": "Students buy and sell second-hand textbooks on campus."
+  },
+  "roles": [
+    { "name": "buyer", "can": ["browse and search listings", "buy a book", "pay", "ask for a refund", "review a seller"] },
+    { "name": "seller", "can": ["list a book with price and condition", "edit or remove own listings", "see orders for their books"] }
+  ],
+  "features": [
+    { "name": "Listings with search", "mvp": true, "stories": ["As a buyer I can search books by title or course code"] },
+    { "name": "Checkout with held payment", "mvp": true, "stories": ["As a buyer I pay and the platform holds the money until I confirm I got the book"] },
+    { "name": "Refunds", "mvp": true, "stories": ["As a buyer I can get a refund if the book never arrives"] },
+    { "name": "Seller reviews", "mvp": true, "stories": ["As a buyer I can rate a seller from 1 to 5 after a purchase"] },
+    { "name": "In-app chat", "mvp": false, "stories": ["As a buyer I can message the seller"] }
+  ],
+  "pages": [
+    { "path": "/", "purpose": "Browse and search listings" },
+    { "path": "/listing", "purpose": "One book with a Buy button and the seller's rating" },
+    { "path": "/sell", "purpose": "Create a listing" },
+    { "path": "/orders", "purpose": "My orders: pay, refund, review" }
+  ],
+  "entities": [
+    { "name": "listing", "fields": [{ "name": "title", "type": "text" }, { "name": "description", "type": "text" }, { "name": "price_cents", "type": "integer" }, { "name": "quantity", "type": "integer" }, { "name": "status", "type": "text" }] },
+    { "name": "order", "fields": [{ "name": "listing_id", "type": "integer" }, { "name": "buyer_id", "type": "integer" }, { "name": "status", "type": "text" }, { "name": "payment_id", "type": "text" }] },
+    { "name": "review", "fields": [{ "name": "order_id", "type": "integer" }, { "name": "seller_id", "type": "integer" }, { "name": "rating", "type": "integer" }, { "name": "comment", "type": "text" }] }
+  ],
+  "endpoints": [
+    { "method": "GET", "path": "/api/listings", "auth": "none", "purpose": "Browse and search" },
+    { "method": "POST", "path": "/api/listings", "auth": "user", "purpose": "Create a listing" },
+    { "method": "POST", "path": "/api/orders", "auth": "user", "purpose": "Buy" },
+    { "method": "POST", "path": "/api/payments/confirm", "auth": "user", "purpose": "Mock payment" },
+    { "method": "POST", "path": "/api/orders/:id/refund", "auth": "user", "purpose": "Refund" },
+    { "method": "POST", "path": "/api/reviews", "auth": "user", "purpose": "Review a seller after a paid order" },
+    { "method": "GET", "path": "/api/users/:id/reviews", "auth": "none", "purpose": "A seller's reviews and average rating" }
+  ],
+  "auth": { "method": "Email and password" },
+  "payments": { "mode": "Mocked checkout; the platform holds payment until the buyer confirms delivery" },
+  "nonFunctional": { "users": "About 2,000 students at one university", "region": "One country", "hosting": "Single small cloud server" },
+  "assumptions": ["Prices are in US dollars", "Meetups on campus, no shipping"]
+}

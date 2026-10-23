@@ -23,9 +23,9 @@ export const BlueprintSchema = z.object({
     .array(z.object({ name: str, fields: z.array(z.object({ name: str, type: z.string().default("text") })).default([]) }))
     .default([]),
   endpoints: z.array(z.object({ method: z.string().default("GET"), path: str, auth: z.string().default("none"), purpose: str })).default([]),
-  auth: z.object({ method: z.string().default("email + password") }).default({}),
-  payments: z.object({ mode: z.string().default("mocked checkout") }).default({}),
-  nonFunctional: z.object({ users: str, region: str }).default({}),
+  auth: z.object({ method: str }).default({}),
+  payments: z.object({ mode: str }).default({}),
+  nonFunctional: z.object({ users: str, region: str, hosting: str }).default({}),
   assumptions: strList,
 });
 export type Blueprint = z.infer<typeof BlueprintSchema>;

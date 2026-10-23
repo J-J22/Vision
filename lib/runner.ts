@@ -1,0 +1,166 @@
+// Runs a build: plan → agents in dependency order → start the app → tests → fix loop.
+// Every step is published as a BuildEvent; /api/build/[id]/events streams them to the browser.
+import { randomUUID } from "node:crypto";
+import { config } from "./config";
+import { planTasks } from "./agents/planner";
+import { runCoder } from "./agents/coders";
+import { reviewFailures } from "./agents/qa";
+import { createWorkspace, readWorkspace, runTests, startApp, writeFiles } from "./sandbox";
+import type { Blueprint, BuildEvent, Minutes, Task, TestResult } from "./types";
+
+export type Build = {
+  id: string;
+  blueprint: Blueprint;
+  minutes?: Minutes;
+  tasks: Task[];
+  events: BuildEvent[];
+  listeners: Set<(e: BuildEvent) => void>;
+  notes: { agent: string; text: string }[];
+  previewUrl?: string;
+};
+
+const MAX_PARALLEL = 2;
+
+const g = globalThis as unknown as { __visionBuilds?: Map<string, Build> };
+const builds = (g.__visionBuilds ??= new Map());
+
+export function getBuild(id: string) {
+  return builds.get(id);
+}
+
+function emit(build: Build, event: BuildEvent) {
+  build.events.push(event);
+  for (const l of build.listeners) l(event);
+}
+
+function setTask(build: Build, task: Task, status: Task["status"]) {
+  task.status = status;
+  emit(build, { type: "task", task: { ...task } });
+}
+
+function say(build: Build, agent: string, text: string) {
+  build.notes.push({ agent, text });
+  emit(build, { type: "message", agent, text });
+}
+
+async function runTask(build: Build, task: Task, fix?: string) {
+  setTask(build, task, "running");
+  try {
+    const out = await runCoder({ buildId: build.id, task, blueprint: build.blueprint, minutes: build.minutes, notes: build.notes, fix });
+    const { written, rejected } = writeFiles(build.id, out.files);
+    if (rejected.length) say(build, "system", `Ignored files outside the rules: ${rejected.join("; ")}`);
+    if (!written.length && !config.fakeAgents) throw new Error("The agent didn't write any of its files");
+    if (out.note) say(build, task.agent, out.note);
+    setTask(build, task, "done");
+  } catch (err) {
+    say(build, task.agent, `Couldn't finish ${task.id}: ${String(err instanceof Error ? err.message : err).slice(0, 300)}`);
+    setTask(build, task, "failed");
+  }
+}
+
+// Runs every task whose dependencies are done, at most MAX_PARALLEL at once
+async function runCodingTasks(build: Build) {
+  const coding = build.tasks.filter((t) => t.agent !== "qa");
+  const running = new Map<string, Promise<void>>();
+  while (true) {
+    const done = new Set(coding.filter((t) => t.status === "done").map((t) => t.id));
+    const blocked = new Set(coding.filter((t) => t.status === "failed").map((t) => t.id));
+    for (const t of coding) {
+      // A task whose dependency failed can't run
+      if (t.status === "waiting" && t.dependsOn.some((d) => blocked.has(d))) setTask(build, t, "failed");
+    }
+    const ready = coding.filter((t) => t.status === "waiting" && t.dependsOn.every((d) => done.has(d)));
+    for (const t of ready) {
+      if (running.size >= MAX_PARALLEL) break;
+      const p = runTask(build, t).finally(() => running.delete(t.id));
+      running.set(t.id, p);
+    }
+    if (!running.size) break;
+    await Promise.race(running.values());
+  }
+}
+
+async function testApp(build: Build): Promise<TestResult[] | null> {
+  try {
+    const { url } = await startApp(build.id);
+    build.previewUrl = url;
+    emit(build, { type: "preview", url });
+  } catch (err) {
+    const message = String(err instanceof Error ? err.message : err);
+    say(build, "qa", `The app didn't start. ${message.slice(0, 600)}`);
+    return [{ name: "The app starts", passed: false, detail: message.slice(0, 2000) }];
+  }
+  const results = await runTests(build.previewUrl!);
+  for (const r of results) emit(build, { type: "test", name: r.name, passed: r.passed, detail: r.detail });
+  return results;
+}
+
+async function run(build: Build) {
+  try {
+    emit(build, { type: "status", status: "planning" });
+    createWorkspace(build.id);
+    build.tasks = await planTasks(build.blueprint, build.minutes);
+    for (const t of build.tasks) emit(build, { type: "task", task: { ...t } });
+    say(build, "planner", `Split the work into ${build.tasks.length - 1} tasks for the backend and frontend agents.`);
+
+    emit(build, { type: "status", status: "building" });
+    await runCodingTasks(build);
+
+    const qa = build.tasks.find((t) => t.agent === "qa")!;
+    setTask(build, qa, "running");
+    emit(build, { type: "status", status: "testing" });
+    let results = await testApp(build);
+
+    for (let attempt = 0; attempt < config.fixRetries && results?.some((r) => !r.passed); attempt++) {
+      const failures = results.filter((r) => !r.passed);
+      const report = await reviewFailures(failures, readWorkspace(build.id));
+      say(build, "qa", report.summary);
+      emit(build, { type: "status", status: "fixing" });
+
+      // One fix task per backend file the QA agent pointed at; default to the core API files
+      const files = report.fixes.length ? [...new Set(report.fixes.map((f) => f.file))] : ["routes/010_listings.js", "routes/020_orders.js"];
+      const failureText = failures.map((f) => `- ${f.name}: ${f.detail}`).join("\n");
+      for (const file of files) {
+        const owner = build.tasks.find((t) => t.files.includes(file));
+        const fixTask: Task = {
+          id: `FIX${attempt + 1}-${owner?.id ?? file}`,
+          agent: "backend",
+          title: `Fix ${file}`,
+          dependsOn: [],
+          files: [file],
+          status: "waiting",
+        };
+        build.tasks.push(fixTask);
+        emit(build, { type: "task", task: { ...fixTask } });
+        const instructions = report.fixes.filter((f) => f.file === file).map((f) => f.instruction).join("\n");
+        await runTask(build, fixTask, `${failureText}${instructions ? `\nQA's advice:\n${instructions}` : ""}`);
+      }
+      emit(build, { type: "status", status: "testing" });
+      results = await testApp(build);
+    }
+
+    const passed = results?.filter((r) => r.passed).length ?? 0;
+    const total = results?.length ?? 0;
+    setTask(build, qa, passed === total ? "done" : "failed");
+    say(build, "qa", `${passed} of ${total} edge-case tests pass.`);
+    emit(build, { type: "status", status: "done", detail: `${passed}/${total} tests passing` });
+  } catch (err) {
+    console.error("[runner]", err);
+    emit(build, { type: "status", status: "failed", detail: String(err instanceof Error ? err.message : err) });
+  }
+}
+
+export function startBuild(blueprint: Blueprint, minutes?: Minutes): Build {
+  const build: Build = {
+    id: randomUUID().slice(0, 8),
+    blueprint,
+    minutes,
+    tasks: [],
+    events: [],
+    listeners: new Set(),
+    notes: [],
+  };
+  builds.set(build.id, build);
+  void run(build);
+  return build;
+}
