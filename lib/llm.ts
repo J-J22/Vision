@@ -181,11 +181,21 @@ async function chat(route: string, label: string, messages: Message[], wanted: n
           // gpt-oss models reason before answering, and that counts against max_tokens; "low" keeps it short
           ...(part.provider === "groq" && part.model.startsWith("openai/gpt-oss") ? { reasoning_effort: config.reasoningEffort } : {}),
         }),
-        signal: AbortSignal.timeout(150_000),
+        // NVIDIA's free models sometimes queue for minutes; a healthy reply comes well inside 45s
+        signal: AbortSignal.timeout(part.provider === "nvidia" ? 45_000 : 150_000),
       });
     } catch (err) {
-      // Dropped Wi-Fi, DNS hiccup or a stalled connection: nothing was used
       booking.tokens = 0;
+      if ((err as Error).name === "TimeoutError") {
+        // Too slow right now: bench it for 10 minutes so the next calls go straight to a spare
+        cooldown.set(id, Date.now() + 10 * 60_000);
+        lastError = `${id} took too long to answer`;
+        report({ slot: route, part: id, event: "error", detail: "timed out" });
+        console.warn(`[llm] ${label}: ${lastError}, benched for 10 min`);
+        failures++;
+        continue;
+      }
+      // Dropped Wi-Fi, DNS hiccup or a stalled connection: nothing was used
       const n = (netFails.get(id) ?? 0) + 1;
       netFails.set(id, n);
       cooldown.set(id, Date.now() + Math.min(1500 * 2 ** n, 30_000));
