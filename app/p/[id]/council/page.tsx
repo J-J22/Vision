@@ -4,19 +4,15 @@ import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Shell } from "@/components/Shell";
-import { Avatar, Typing } from "@/components/Avatar";
+import { Typing } from "@/components/Avatar";
 import { look, SEAT_ORDER } from "@/components/agents";
 import { useProject } from "@/components/useProject";
 import type { CouncilMessage, CouncilRound } from "@/lib/types";
+import { Topology, TYPE_COLOR, targets } from "./Topology";
+import s from "./council.module.css";
 
-const VERB: Record<string, string> = { claim: "proposes", verify: "verifies", challenge: "challenges", concede: "concedes", info: "" };
-const TYPE_CHIP: Record<string, string> = { claim: "", verify: "green", challenge: "amber", concede: "green", info: "" };
-
-function phaseIndex(r: CouncilRound) {
-  if (r.phase === "blind") return 0;
-  if (r.phase === "debate") return 1;
-  return 2;
-}
+const PHASES = ["blind", "debate", "synthesis", "closed"] as const;
+const PHASE_NAME: Record<string, string> = { blind: "Sealed claims", debate: "Cross-exam", synthesis: "Synthesis", closed: "Closed" };
 
 function floorText(r: CouncilRound) {
   if (!r.speaking) return r.phase === "closed" ? "" : "Passing the floor…";
@@ -26,19 +22,15 @@ function floorText(r: CouncilRound) {
   return `${name} is writing the consensus report…`;
 }
 
-function Turn({ m }: { m: CouncilMessage }) {
-  return (
-    <div className={`turn ${m.type}`}>
-      <span className={`chip ${TYPE_CHIP[m.type]}`}>{m.type}</span>
-      <p style={{ marginTop: 6 }}>{m.msg}</p>
-      {m.analysis && (
-        <details style={{ marginTop: 6 }}>
-          <summary>Full reasoning</summary>
-          <p className="small muted" style={{ whiteSpace: "pre-wrap" }}>{m.analysis}</p>
-        </details>
-      )}
-    </div>
-  );
+function clock(at: string) {
+  const d = new Date(at);
+  return isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+}
+
+function route(m: CouncilMessage) {
+  const to = targets(m);
+  const dest = to.length >= SEAT_ORDER.length - (m.from === "moderator" ? 0 : 1) ? "all" : to.map((x) => look(x).name).join(", ");
+  return `${m.from === "moderator" ? "Hub" : look(m.from).name} → ${dest}`;
 }
 
 export default function Council({ params }: { params: Promise<{ id: string }> }) {
@@ -46,12 +38,26 @@ export default function Council({ params }: { params: Promise<{ id: string }> })
   const { project: p, problem, act } = useProject(id);
   const router = useRouter();
   const [picked, setPicked] = useState<number | null>(null);
-  const logEnd = useRef<HTMLDivElement>(null);
+  const [pulse, setPulse] = useState<{ m: CouncilMessage; key: number } | null>(null);
+  const [sel, setSel] = useState<number | null>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const seen = useRef<{ round: number; len: number } | null>(null);
   const r = p ? p.rounds[(picked ?? p.rounds.length) - 1] : undefined;
 
+  // New message on the round we're watching: send it as a packet and keep the event list at the bottom
   useEffect(() => {
-    logEnd.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [r?.messages.length, r?.speaking]);
+    if (!r) return;
+    const prev = seen.current;
+    seen.current = { round: r.round, len: r.messages.length };
+    if (prev && prev.round === r.round && r.messages.length > prev.len) {
+      setPulse({ m: r.messages[r.messages.length - 1], key: Date.now() });
+      if (list.current) list.current.scrollTop = list.current.scrollHeight;
+    } else if (!prev || prev.round !== r.round) {
+      setPulse(null);
+      setSel(null);
+      if (list.current) list.current.scrollTop = list.current.scrollHeight;
+    }
+  }, [r]);
 
   // Watched a round finish and it has questions for the user: show the score briefly, then go answer them
   const wasLive = useRef(false);
@@ -74,9 +80,10 @@ export default function Council({ params }: { params: Promise<{ id: string }> })
     );
   }
 
-  const step = phaseIndex(r);
   const live = r.status === "running";
   const pct = Math.round(r.confidence * 100);
+  const at = PHASES.indexOf(r.phase);
+  const shown = r.messages.find((m) => m.n === sel);
 
   return (
     <Shell project={p} page="council">
@@ -102,75 +109,50 @@ export default function Council({ params }: { params: Promise<{ id: string }> })
         <div className="notice"><span>crossexam couldn't run, so Vision's built-in panel reviewed the plan instead (no cross-examination this round).</span>{r.error && <details><summary>Why</summary><p className="small muted">{r.error}</p></details>}</div>
       )}
 
-      <div className="tracker">
-        {["Sealed proposals", "Cross-examination", "Consensus"].map((name, i) => (
-          <div key={name} className={live && step === i ? "now" : step > i || !live ? "done" : ""}>
-            <span className="label">Stage {String(i + 1).padStart(2, "0")} {step > i || !live ? "✓ done" : live && step === i ? "// active" : ""}</span>
-            <h3>{name}</h3>
+      <div className={s.sim}>
+        <section className={s.stage}>
+          <div className={s.stageHead}>
+            <span className="label neon">// Topology · simulation</span>
+            <span className={`chip ${live ? "amber" : "green"}`}>{live ? "Live" : "Adjourned"} · confidence {pct}%</span>
           </div>
-        ))}
-      </div>
+          <div className={s.phases}>
+            {PHASES.map((ph, i) => (
+              <span key={ph} className={i < at || (!live && i === at) ? s.past : i === at ? s.now : ""}>{i < at || (!live && i === at) ? "✓ " : ""}{PHASE_NAME[ph]}</span>
+            ))}
+          </div>
+          <Topology r={r} pulse={pulse} />
+          <div className={s.legend}>
+            {Object.entries(TYPE_COLOR).map(([k, c]) => <span key={k} style={{ ["--t" as string]: c }}><i />{k}</span>)}
+          </div>
+          {live && <span className={s.floor}>{floorText(r)} {r.speaking && <Typing />}</span>}
+        </section>
 
-      {live && (
-        <div className="panel glow">
-          <div className="row">
-            {r.speaking ? <Avatar who={r.speaking} size="lg" speaking /> : <Avatar who="moderator" size="lg" />}
-            <div className="grow stack" style={{ gap: 4 }}>
-              <span className="label neon">On the floor</span>
-              <span>{floorText(r)}</span>
+        <section className={`panel ${s.events}`}>
+          <div className="panel-head"><span className="label">// Event list</span><span className="chip">{r.messages.length} events</span></div>
+          <div className={s.list} ref={list} aria-live="polite">
+            {r.messages.length === 0 && <p className={s.empty}>The seats are writing sealed proposals. Events appear here when the envelopes open.</p>}
+            {r.messages.map((m) => (
+              <button key={m.n} className={`${s.evRow} ${sel === m.n ? s.picked : ""}`} onClick={() => { setSel(m.n); setPulse({ m, key: Date.now() }); }}>
+                <span className={s.evTime}>{clock(m.at)}</span>
+                <span className={s.evPath}>{route(m)}</span>
+                <span className={s.type} style={{ ["--t" as string]: TYPE_COLOR[m.type] }}>{m.type}</span>
+                <span className={s.evMsg}>{m.from === "moderator" ? m.msg.replace("phase -> ", "Phase: ") : m.msg}</span>
+              </button>
+            ))}
+          </div>
+          {shown ? (
+            <div className={s.detail}>
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <span className="label" style={{ color: look(shown.from).color }}>#{shown.n} · {route(shown)}</span>
+                <span className={s.type} style={{ ["--t" as string]: TYPE_COLOR[shown.type] }}>{shown.type}</span>
+              </div>
+              <p>{shown.msg}</p>
+              {shown.analysis && (<><span className="label">Reasoning</span><p className={s.analysis}>{shown.analysis}</p></>)}
             </div>
-            <Typing />
-          </div>
-        </div>
-      )}
-
-      <div className="arena">
-        {SEAT_ORDER.map((s) => {
-          const a = look(s);
-          const turns = r.messages.filter((m) => m.from === s);
-          const sealed = r.sealed.includes(s);
-          return (
-            <article key={s} className={`seatcard ${r.speaking === s ? "speaking" : ""}`} style={{ ["--c" as string]: a.color }}>
-              <div className="row">
-                <Avatar who={s} speaking={r.speaking === s} />
-                <div className="grow">
-                  <h3>[{a.name.toUpperCase()}]</h3>
-                  <span className="label">Role: {a.role}</span>
-                </div>
-                {r.speaking === s ? <span className="chip amber">Speaking</span> : sealed ? <span className="chip amber">Sealed</span> : turns.some((t) => t.type === "concede") ? <span className="chip green">Conceded</span> : turns.length ? <span className="chip green">On record</span> : <span className="chip">Waiting</span>}
-              </div>
-              {sealed && (
-                <div className="sealed"><span className="icon">mail_lock</span><span className="small">Proposal sealed. It opens when cross-examination starts, so nobody copies anybody.</span></div>
-              )}
-              {turns.map((m) => <Turn key={m.n} m={m} />)}
-              {!sealed && !turns.length && <p className="small muted">{r.speaking === s ? "Writing…" : "Hasn't spoken yet."}</p>}
-            </article>
-          );
-        })}
-      </div>
-
-      <div className="panel">
-        <div className="panel-head"><span className="label">// Debate transcript</span><span className={`chip ${live ? "amber" : "green"}`}>{live ? "Live" : `${r.messages.filter((m) => m.from !== "moderator").length} statements`}</span></div>
-        <div className="transcript" aria-live="polite">
-          {r.messages.length === 0 && <p className="small muted">The seats are writing sealed proposals. Their statements appear here when the envelopes open.</p>}
-          {r.messages.map((m) =>
-            m.from === "moderator" ? (
-              <div key={m.n} className="mod">{m.msg.replace("phase -> ", "Moderator: ")}</div>
-            ) : (
-              <div key={m.n} className="line">
-                <Avatar who={m.from} size="sm" />
-                <div className={`say ${m.type}`}>
-                  <span className="label" style={{ color: look(m.from).color }}>{look(m.from).name} {VERB[m.type]}</span>
-                  <p>{m.msg}</p>
-                </div>
-              </div>
-            ),
+          ) : (
+            <p className="small muted">Click an event to read the full message and replay its packet.</p>
           )}
-          {live && r.speaking && r.phase === "debate" && (
-            <div className="line"><Avatar who={r.speaking} size="sm" speaking /><Typing /></div>
-          )}
-          <div ref={logEnd} />
-        </div>
+        </section>
       </div>
 
       {r.status === "done" && (

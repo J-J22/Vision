@@ -1,0 +1,68 @@
+/* Council as a Packet Tracer style simulation: topology on the left, event list on the right */
+.sim { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1000px) { .sim { grid-template-columns: 1fr; } }
+
+.stage { background: var(--sink); border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.stageHead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.floor { font-size: 12.5px; color: var(--muted); min-height: 18px; }
+
+/* phase strip: blind -> debate -> synthesis -> closed */
+.phases { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.phases span { flex: 1; padding: 6px 8px; font: 10px/1.2 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); text-align: center; border-right: 1px solid var(--line); }
+.phases span:last-child { border-right: 0; }
+.phases .past { color: var(--text); }
+.phases .now { color: var(--bg); background: var(--neon); }
+
+/* topology */
+.topo { width: 100%; height: auto; display: block; max-height: 460px; }
+.cable { stroke: var(--line); stroke-width: 2; }
+.cableHot { stroke: color-mix(in srgb, var(--muted) 60%, var(--line)); }
+.hub { fill: var(--raised); stroke: var(--muted); stroke-width: 1.2; }
+.hubName { font: 600 12px var(--display); fill: var(--text); }
+.device { fill: color-mix(in srgb, var(--c) 8%, var(--panel)); stroke: var(--c); stroke-width: 1.2; }
+.deviceOn { stroke-width: 2; }
+.glyph { font-size: 24px; }
+.badge { font-size: 13px; }
+.name { font: 600 12px var(--display); fill: var(--text); }
+.sub { font: 9.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; fill: var(--muted); }
+.node text { user-select: none; }
+
+.ring { fill: none; stroke: var(--c); stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: ring 1.6s ease-out infinite; }
+@keyframes ring { from { opacity: 0.7; transform: scale(0.85); } to { opacity: 0; transform: scale(1.25); } }
+
+.recv { fill: none; stroke: var(--c); stroke-width: 2; opacity: 0; animation: recv 1.1s ease-out both; }
+@keyframes recv { 0% { opacity: 0; } 20% { opacity: 1; } 100% { opacity: 0; } }
+
+.packet { opacity: 0; animation-name: travel; animation-timing-function: ease-in-out; animation-fill-mode: both; }
+@keyframes travel {
+  0% { opacity: 1; transform: translate(var(--x1), var(--y1)); }
+  92% { opacity: 1; transform: translate(var(--x2), var(--y2)); }
+  100% { opacity: 0; transform: translate(var(--x2), var(--y2)); }
+}
+
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font: 10px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 7px; border-radius: 1px; margin-right: 5px; background: var(--t); vertical-align: middle; }
+
+/* event list */
+.events { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.list { max-height: 360px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--sink); }
+.evRow { display: grid; grid-template-columns: 62px minmax(0, 1fr) 72px; gap: 8px; align-items: center; width: 100%; padding: 7px 10px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); font: 11px var(--mono); text-align: left; cursor: pointer; }
+.evRow:hover { background: var(--panel); }
+.evRow.picked { background: var(--raised); }
+.evTime { color: var(--muted); }
+.evPath { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evMsg { grid-column: 1 / -1; color: var(--muted); font: 12px var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.type { justify-self: end; padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--t) 50%, var(--line)); color: var(--t); border-radius: 2px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.08em; }
+.empty { padding: 14px; font-size: 12px; color: var(--muted); }
+
+.detail { border: 1px solid var(--line); border-radius: 4px; padding: 12px; background: var(--panel); display: flex; flex-direction: column; gap: 8px; }
+.detail p { margin: 0; font-size: 13px; line-height: 1.5; }
+.analysis { white-space: pre-wrap; color: var(--muted); font-size: 12px !important; max-height: 220px; overflow-y: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  .packet, .ring, .recv { animation: none; opacity: 0; }
+}
+@media (max-width: 640px) {
+  .evRow { grid-template-columns: 54px minmax(0, 1fr) 64px; }
+  .sub { font-size: 11px; }
+}
