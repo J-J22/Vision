@@ -23,7 +23,11 @@ export type ProjectView = {
   buildId?: string;
   busy?: string;
   error?: string;
+  rev?: number;
 };
+
+// A click's reply can arrive after a newer update from the live stream; keep whichever is newer
+const newer = (next: ProjectView) => (prev: ProjectView | null) => (prev && (prev.rev ?? 0) > (next.rev ?? 0) ? prev : next);
 
 export function useProject(id: string) {
   const [project, setProject] = useState<ProjectView | null>(null);
@@ -39,9 +43,9 @@ export function useProject(id: string) {
       .then((d) => {
         if (closed) return;
         if (d.error) return setProblem(d.error);
-        setProject(d);
+        setProject(newer(d));
         source = new EventSource(`/api/projects/${id}/events`);
-        source.onmessage = (e) => setProject(JSON.parse(e.data));
+        source.onmessage = (e) => setProject(newer(JSON.parse(e.data)));
         source.onerror = () => setProblem("Lost the live connection. It reconnects automatically; refresh if this stays.");
         source.onopen = () => setProblem("");
       })
@@ -61,7 +65,7 @@ export function useProject(id: string) {
         return false;
       }
       setProblem("");
-      setProject(d);
+      setProject(newer(d));
       return true;
     },
     [id],

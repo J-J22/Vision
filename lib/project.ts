@@ -35,6 +35,7 @@ export type Project = {
   busy?: string; // what Vision is doing right now, shown to the user
   error?: string;
   origin: string; // where this server is reachable, for the council's model relay
+  rev?: number; // goes up on every change, so pages can drop a snapshot older than the one they show
 };
 
 const DATA = join(process.cwd(), "data");
@@ -61,6 +62,7 @@ function save(p: Project) {
 }
 
 function changed(p: Project) {
+  p.rev = (p.rev ?? 0) + 1;
   save(p);
   for (const fn of listeners.get(p.id) ?? []) fn();
 }
