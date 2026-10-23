@@ -5,7 +5,7 @@ import { config } from "./config";
 import { planTasks } from "./agents/planner";
 import { runCoder } from "./agents/coders";
 import { reviewFailures } from "./agents/qa";
-import { createWorkspace, readWorkspace, runTests, startApp, writeFiles } from "./sandbox";
+import { createWorkspace, readWorkspace, runTests, startApp, validateFiles, writeFiles } from "./sandbox";
 import type { Blueprint, BuildEvent, Minutes, Task, TestResult } from "./types";
 
 export type Build = {
@@ -46,12 +46,23 @@ function say(build: Build, agent: string, text: string) {
 async function runTask(build: Build, task: Task, fix?: string) {
   setTask(build, task, "running");
   try {
-    const out = await runCoder({ buildId: build.id, task, blueprint: build.blueprint, minutes: build.minutes, notes: build.notes, fix });
-    const { written, rejected } = writeFiles(build.id, out.files);
-    if (rejected.length) say(build, "system", `Ignored files outside the rules: ${rejected.join("; ")}`);
-    if (!written.length && !config.fakeAgents) throw new Error("The agent didn't write any of its files");
-    if (out.note) say(build, task.agent, out.note);
-    setTask(build, task, "done");
+    let instructions = fix;
+    // Two attempts: if the code doesn't pass the quick checks, the agent gets the errors and tries once more
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const out = await runCoder({ buildId: build.id, task, blueprint: build.blueprint, minutes: build.minutes, notes: build.notes, fix: instructions });
+      const { written, rejected } = writeFiles(build.id, out.files);
+      if (rejected.length) say(build, "system", `Ignored files outside the rules: ${rejected.join("; ")}`);
+      if (!written.length && !config.fakeAgents) throw new Error("The agent didn't write any of its files");
+      const problems = validateFiles(build.id, written);
+      if (!problems.length) {
+        if (out.note) say(build, task.agent, out.note);
+        setTask(build, task, "done");
+        return;
+      }
+      say(build, "reviewer", `${task.id} needs changes: ${problems.join(" ")}`);
+      if (attempt === 2) throw new Error(`Code still has problems after a retry: ${problems.join(" ")}`);
+      instructions = `${fix ? `${fix}\n` : ""}Your files failed the automatic checks:\n- ${problems.join("\n- ")}`;
+    }
   } catch (err) {
     say(build, task.agent, `Couldn't finish ${task.id}: ${String(err instanceof Error ? err.message : err).slice(0, 300)}`);
     setTask(build, task, "failed");

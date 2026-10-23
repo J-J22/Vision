@@ -72,14 +72,14 @@ export async function planTasks(blueprint: Blueprint, minutes?: Minutes): Promis
     try {
       const result = await callLLM({
         label: "planner",
-        model: config.models.big,
+        model: config.agentModels.planner,
         system: SYSTEM,
         schema: PlanSchema,
         messages: [
           {
             role: "user",
             content: JSON.stringify({
-              blueprint: { app: blueprint.app, roles: blueprint.roles, features: blueprint.features, pages: blueprint.pages, entities: blueprint.entities },
+              blueprint: { app: blueprint.app.name, features: blueprint.features.map((f) => ({ name: f.name, mvp: f.mvp })), pages: blueprint.pages.map((p) => p.path), entities: blueprint.entities.map((e) => e.name) },
               decisions: minutes?.decisions ?? [],
               basePlan: DEFAULT_PLAN,
             }),

@@ -21,8 +21,9 @@ export type AgentInput = {
   fix?: string; // set for fix tasks: what went wrong and what to change
 };
 
-const MAX_FILE_CHARS = 6000;
-const MAX_CONTEXT_CHARS = 24000;
+// Kept small: Groq's free tier allows 8,000 tokens per minute per model, prompt and answer together
+const MAX_FILE_CHARS = 5000;
+const MAX_CONTEXT_CHARS = 7000;
 
 function filesBlock(files: Record<string, string>): string {
   let total = 0;
@@ -69,13 +70,14 @@ Only call API endpoints that exist in the API list you're given. Follow these pr
 
 {{CONVENTIONS}}
 
-The shared helper file public/app.js looks like this:
-{{APPJS}}
-
 Write complete files, never placeholders or "...". Return {"files": [{"path": "...", "content": "..."}], "note": "..."}.`;
 
-function blueprintSlice(bp: Blueprint) {
-  return { app: bp.app, roles: bp.roles, features: bp.features, entities: bp.entities, endpoints: bp.endpoints, pages: bp.pages, payments: bp.payments };
+// Each agent sees only the parts of the Blueprint its job needs
+function blueprintSlice(bp: Blueprint, agent: string) {
+  const features = bp.features.filter((f) => f.mvp).map((f) => ({ name: f.name, stories: f.stories }));
+  return agent === "backend"
+    ? { app: bp.app.name, features, entities: bp.entities, endpoints: bp.endpoints, payments: bp.payments.mode }
+    : { app: bp.app, roles: bp.roles, features, pages: bp.pages };
 }
 
 function taskMessage(input: AgentInput, extra: Record<string, string>) {
@@ -84,7 +86,7 @@ function taskMessage(input: AgentInput, extra: Record<string, string>) {
     `TASK ${task.id}: ${task.title}`,
     `Files you must write: ${task.files.join(", ")}`,
     fix ? `\nTHIS IS A FIX. The tests found problems:\n${fix}\nRewrite the files so these problems are fixed, keeping everything else working.` : "",
-    `\nBLUEPRINT:\n${JSON.stringify(blueprintSlice(input.blueprint), null, 1)}`,
+    `\nBLUEPRINT:\n${JSON.stringify(blueprintSlice(input.blueprint, task.agent))}`,
     minutes?.decisions.length ? `\nDECISIONS MADE WITH THE USER:\n- ${minutes.decisions.join("\n- ")}` : "",
     ...Object.entries(extra).map(([k, v]) => `\n${k}:\n${v}`),
     `\nNOTES FROM TEAMMATES:\n${notes.slice(-12).map((n) => `${n.agent}: ${n.text}`).join("\n") || "(none)"}`,
@@ -114,14 +116,13 @@ export async function runCoder(input: AgentInput): Promise<AgentOutput> {
   const mine = Object.fromEntries(Object.entries(workspace).filter(([p]) => input.task.files.includes(p)));
   const isBackend = input.task.agent === "backend";
 
-  const system = (isBackend ? BACKEND_SYSTEM : FRONTEND_SYSTEM)
-    .replace("{{CONVENTIONS}}", () => conventions())
-    .replace("{{APPJS}}", () => workspace["public/app.js"] ?? "");
+  const system = (isBackend ? BACKEND_SYSTEM : FRONTEND_SYSTEM).replace("{{CONVENTIONS}}", () => conventions(isBackend ? "backend" : "frontend"));
 
   const extra: Record<string, string> = isBackend
     ? {
         "EXISTING TABLES": filesBlock(Object.fromEntries(Object.entries(workspace).filter(([p]) => p.startsWith("db/")))),
-        "EXISTING ROUTES": filesBlock(Object.fromEntries(Object.entries(workspace).filter(([p]) => p.startsWith("routes/") && !input.task.files.includes(p) && !p.startsWith("routes/00")))),
+        // Other route files as an endpoint list only: full code would blow the token budget
+        "ENDPOINTS OTHER TASKS BUILT": apiSummary(Object.fromEntries(Object.entries(workspace).filter(([p]) => !input.task.files.includes(p)))),
       }
     : {
         "API LIST (what the backend built)": apiSummary(workspace),
@@ -131,10 +132,10 @@ export async function runCoder(input: AgentInput): Promise<AgentOutput> {
 
   const result = await callLLM({
     label: `${input.task.agent} ${input.task.id}`,
-    model: config.models.big,
+    model: isBackend ? config.agentModels.backend : config.agentModels.frontend,
     system,
     schema: OutputSchema,
-    maxTokens: 8192,
+    maxTokens: 4096,
     temperature: 0.2,
     messages: [{ role: "user", content: taskMessage(input, extra) }],
   });

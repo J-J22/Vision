@@ -1,6 +1,6 @@
 // Each build gets its own copy of the marketplace template in workspaces/<id>/.
 // The generated app runs as a separate Node process on its own port.
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { dirname, join, posix, relative, resolve } from "node:path";
@@ -78,6 +78,33 @@ export function writeFiles(id: string, files: { path: string; content: string }[
   return { written, rejected };
 }
 
+// Checks files an agent just wrote, before the app ever starts. Returns problems in words an agent can act on.
+export function validateFiles(id: string, paths: string[]): string[] {
+  const dir = workspacePath(id);
+  const problems: string[] = [];
+  for (const path of paths.filter((p) => p.endsWith(".js") && p.startsWith("routes/"))) {
+    const code = readFileSync(join(dir, path), "utf8");
+    for (const m of code.matchAll(/(?:^|\n)\s*import\s[^;]*?from\s*["']([^"']+)["']|require\(\s*["']([^"']+)["']\s*\)/g)) {
+      const pkg = m[1] ?? m[2];
+      if (pkg !== "express" && !pkg.startsWith("node:") && !pkg.startsWith("../lib/")) {
+        problems.push(`${path} imports "${pkg}", which isn't installed. Remove the import and use what's passed in ({ db, tx, requireAuth, optionalAuth }) or a node: built-in.`);
+      }
+    }
+    const check = spawnSync(process.execPath, ["--check", join(dir, path)], { encoding: "utf8" });
+    if (check.status !== 0) problems.push(`${path} has a syntax error: ${check.stderr.split("\n").slice(0, 5).join(" ").slice(0, 400)}`);
+  }
+  // Run every SQL file, in order, against an empty in-memory database
+  if (paths.some((p) => p.endsWith(".sql"))) {
+    const script = `const { DatabaseSync } = require("node:sqlite"); const fs = require("node:fs"); const db = new DatabaseSync(":memory:");
+      for (const f of fs.readdirSync("db").filter((f) => f.endsWith(".sql")).sort()) {
+        try { db.exec(fs.readFileSync("db/" + f, "utf8")); } catch (e) { console.error("db/" + f + ": " + e.message); process.exit(1); }
+      }`;
+    const run = spawnSync(process.execPath, ["-e", script], { cwd: dir, encoding: "utf8" });
+    if (run.status !== 0) problems.push(`SQL error: ${run.stderr.trim().split("\n").pop()?.slice(0, 400)}`);
+  }
+  return problems;
+}
+
 // All files agents can see, as { path: content }, skipping the starter internals
 export function readWorkspace(id: string, folders = WRITABLE): Record<string, string> {
   const dir = workspacePath(id);
@@ -93,8 +120,18 @@ export function readWorkspace(id: string, folders = WRITABLE): Record<string, st
   return out;
 }
 
-export function conventions(): string {
-  return readFileSync(join(TEMPLATE, "CONVENTIONS.md"), "utf8");
+// The rulebook, cut down to the sections an agent needs (smaller prompts fit Groq's limits)
+const SECTIONS: Record<string, string[]> = {
+  backend: ["Where files go", "Database", "Route file shape", "Errors", "Required core API"],
+  frontend: ["Where files go", "Required core API", "Pages"],
+};
+
+export function conventions(agent?: "backend" | "frontend"): string {
+  const text = readFileSync(join(TEMPLATE, "CONVENTIONS.md"), "utf8");
+  if (!agent) return text;
+  const [intro, ...sections] = text.split(/^## /m);
+  const keep = sections.filter((sec) => SECTIONS[agent].some((name) => sec.startsWith(name)));
+  return [intro.trim(), ...keep.map((sec) => `## ${sec.trim()}`)].join("\n\n");
 }
 
 async function freePort(): Promise<number> {

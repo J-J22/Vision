@@ -18,7 +18,16 @@ export const config = {
       "qwen/qwen3.8-27b",
     ]),
   },
+  // Which model each build agent uses. Groq limits are per model, so spreading agents across models is faster.
+  agentModels: {
+    planner: process.env.GROQ_MODEL_PLANNER ?? "openai/gpt-oss-20b",
+    backend: process.env.GROQ_MODEL_BACKEND ?? "openai/gpt-oss-120b",
+    frontend: process.env.GROQ_MODEL_FRONTEND ?? "qwen/qwen3.8-27b",
+    qa: process.env.GROQ_MODEL_QA ?? "openai/gpt-oss-20b",
+  },
   concurrency: Number(process.env.LLM_CONCURRENCY ?? 3),
+  // Groq's free tier allows 8,000 tokens per minute per model; raise this on a paid tier
+  tokensPerMinute: Number(process.env.GROQ_TOKENS_PER_MINUTE ?? 8000),
   fakeAgents: process.env.VISION_FAKE_AGENTS === "1",
   parliament: {
     confidenceThreshold: 0.8,

@@ -30,6 +30,8 @@ export default function (app, { db, tx, requireAuth, optionalAuth }) {
 }
 ```
 Use ES module syntax only (`import`/`export`), no `require`. Handlers are synchronous; no `await` is needed for the database.
+**Don't import any packages.** Only `express` and Node built-ins (`node:crypto`, …) are installed; anything else crashes the app.
+Everything you need (`db`, `tx`, `requireAuth`, `optionalAuth`) arrives in the second argument. Use `?` placeholders for SQL values; never build SQL from strings.
 
 ## Errors
 

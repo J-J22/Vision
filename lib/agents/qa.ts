@@ -25,7 +25,7 @@ export async function reviewFailures(failures: TestResult[], files: Record<strin
   try {
     return await callLLM({
       label: "qa",
-      model: config.models.big,
+      model: config.agentModels.qa,
       system: SYSTEM,
       schema: QaSchema,
       messages: [
@@ -33,7 +33,7 @@ export async function reviewFailures(failures: TestResult[], files: Record<strin
           role: "user",
           content: `FAILED TESTS:\n${failures.map((f) => `- ${f.name}: ${f.detail}`).join("\n")}\n\nBACKEND FILES:\n${Object.entries(files)
             .filter(([p]) => (p.startsWith("routes/") || p.startsWith("db/")) && !p.startsWith("routes/00") && p !== "db/001_core.sql")
-            .map(([p, c]) => `--- ${p}\n${c.slice(0, 6000)}`)
+            .map(([p, c]) => `--- ${p}\n${c.slice(0, 4000)}`)
             .join("\n\n")}`,
         },
       ],

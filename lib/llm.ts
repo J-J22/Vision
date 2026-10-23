@@ -1,7 +1,8 @@
 // Groq wrapper: every model call in Vision goes through callLLM.
 // - asks for JSON and validates it against a zod schema
 // - on invalid output, retries once with the validation error
-// - on 429 (rate limit) or 5xx, waits and retries
+// - paces calls to stay under each model's tokens-per-minute limit
+// - on 429 (rate limit) or 5xx, waits as long as Groq asks and retries
 // - caps how many calls run at once (LLM_CONCURRENCY)
 import { z } from "zod";
 import { config } from "./config";
@@ -39,12 +40,48 @@ function release() {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// ---------- tokens-per-minute pacing ----------
+
+// Rough count: about 3.5 characters per token for English and code
+export const estimateTokens = (text: string) => Math.ceil(text.length / 3.5);
+
+const g = globalThis as unknown as { __visionTokenLog?: Map<string, { at: number; tokens: number }[]> };
+const tokenLog: Map<string, { at: number; tokens: number }[]> = (g.__visionTokenLog ??= new Map());
+
+function usedLastMinute(model: string) {
+  const cutoff = Date.now() - 60_000;
+  const log = (tokenLog.get(model) ?? []).filter((e) => e.at > cutoff);
+  tokenLog.set(model, log);
+  return log.reduce((sum, e) => sum + e.tokens, 0);
+}
+
+// Waits until this request fits in the model's per-minute budget, then books it
+async function reserve(model: string, tokens: number) {
+  while (usedLastMinute(model) + tokens > config.tokensPerMinute) {
+    const oldest = tokenLog.get(model)?.[0];
+    await sleep(oldest ? Math.max(500, oldest.at + 60_000 - Date.now() + 250) : 1000);
+  }
+  tokenLog.get(model)!.push({ at: Date.now(), tokens });
+}
+
+// Groq sends waits like "7.66s", "1m2.5s" or "120ms"
+function parseWait(value: string | null): number | null {
+  if (!value) return null;
+  if (/^\d+(\.\d+)?$/.test(value)) return Number(value) * 1000;
+  let ms = 0;
+  for (const [, n, unit] of value.matchAll(/(\d+(?:\.\d+)?)(ms|m|s|h)/g)) {
+    ms += Number(n) * (unit === "h" ? 3_600_000 : unit === "m" ? 60_000 : unit === "s" ? 1000 : 1);
+  }
+  return ms || null;
+}
+
 // ---------- raw call ----------
 
 async function chat(model: string, messages: Message[], temperature: number, maxTokens: number): Promise<string> {
   if (!config.groqKey) throw new Error("GROQ_API_KEY is not set. Copy .env.example to .env.local and add your key.");
 
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    await reserve(model, estimateTokens(messages.map((m) => m.content).join("\n")) + maxTokens);
     const res = await fetch(`${config.groqBaseUrl}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.groqKey}` },
@@ -58,10 +95,12 @@ async function chat(model: string, messages: Message[], temperature: number, max
     });
 
     if (res.status === 429 || res.status >= 500) {
-      const retryAfter = Number(res.headers.get("retry-after"));
-      const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** attempt;
-      console.warn(`[llm] ${model} returned ${res.status}, retrying in ${wait}ms`);
-      await sleep(Math.min(wait, 20000));
+      const wait =
+        parseWait(res.headers.get("retry-after")) ??
+        parseWait(res.headers.get("x-ratelimit-reset-tokens")) ??
+        1000 * 2 ** attempt;
+      console.warn(`[llm] ${model} returned ${res.status}, retrying in ${Math.round(wait)}ms`);
+      await sleep(Math.min(wait + 250, 60_000));
       continue;
     }
     if (!res.ok) {
@@ -90,11 +129,20 @@ function extractJson(text: string): unknown {
 // ---------- public API ----------
 
 export async function callLLM<T extends z.ZodTypeAny>(opts: CallOptions<T>): Promise<z.infer<T>> {
-  const { model, system, schema, temperature = 0.3, maxTokens = 4096, label = "llm" } = opts;
+  const { model, system, schema, temperature = 0.3, label = "llm" } = opts;
   const messages: Message[] = [
     { role: "system", content: `${system}\n\nRespond with a single JSON object only. No prose, no markdown fences.` },
     ...opts.messages,
   ];
+
+  // Groq rejects any request whose prompt + max output is bigger than the per-minute limit,
+  // so shrink the output budget to fit, and fail clearly if the prompt alone is too big
+  const promptTokens = estimateTokens(messages.map((m) => m.content).join("\n"));
+  const room = config.tokensPerMinute - promptTokens - 200;
+  if (room < 800) {
+    throw new Error(`${label}: prompt is about ${promptTokens} tokens, too big for the ${config.tokensPerMinute} tokens/minute limit. Send less context.`);
+  }
+  const maxTokens = Math.min(opts.maxTokens ?? 4096, room);
 
   await acquire();
   try {
