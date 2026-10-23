@@ -1,7 +1,7 @@
 // The app shell: nav, footer and routes. Agents don't edit this file.
 // Every file in pages/ becomes a page: `export const route = "/projects/:id"` and a default component.
 // `export const auth = true` sends signed-out visitors to /login first.
-import { useEffect, useState } from "react";
+import { Component, useEffect, useState } from "react";
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Menu, Moon, Sun, X } from "lucide-react";
 import site from "./site.js";
@@ -12,6 +12,24 @@ const modules = import.meta.glob("./pages/*.jsx", { eager: true });
 const pages = Object.entries(modules)
   .map(([file, m]) => ({ file, route: m.route, auth: m.auth, Page: m.default }))
   .filter((p) => typeof p.route === "string" && p.Page);
+
+// A page that crashes shows an error card instead of a white screen
+class PageBoundary extends Component {
+  state = { error: null };
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="mx-auto max-w-lg space-y-3 px-5 py-24 text-center">
+        <h1 className="text-2xl font-bold">Something went wrong on this page</h1>
+        <p className="text-sm text-muted">{String(this.state.error?.message ?? this.state.error)}</p>
+        <a href="/" className="inline-block rounded-theme bg-brand px-5 py-2.5 font-semibold text-brand-fg">Back to home</a>
+      </div>
+    );
+  }
+}
 
 function Guard({ page }) {
   const user = useUser();
@@ -38,7 +56,9 @@ function Nav() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const location = useLocation();
-  useEffect(() => setOpen(false), [location.pathname]);
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
   const links = site.nav ?? [];
   const linkCls = ({ isActive }) => cn("rounded-theme px-3 py-2 text-sm font-medium transition", isActive ? "text-fg" : "text-muted hover:text-fg");
   const account = site.showLogin === false ? null : user ? (
@@ -88,7 +108,10 @@ function Footer() {
 
 export default function App() {
   const location = useLocation();
-  useEffect(() => window.scrollTo(0, 0), [location.pathname]);
+  // Braces matter: newer browsers return a Promise from scrollTo, and React would call it as a cleanup
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
   useEffect(() => { document.title = site.name; }, []);
   const notFound = pages.find((p) => p.route === "*");
   return (
@@ -96,7 +119,7 @@ export default function App() {
       <Nav />
       <main className="flex-1">
         <Routes>
-          {pages.filter((p) => p.route !== "*").map((p) => <Route key={p.file} path={p.route} element={<Guard page={p} />} />)}
+          {pages.filter((p) => p.route !== "*").map((p) => <Route key={p.file} path={p.route} element={<PageBoundary key={p.file}><Guard page={p} /></PageBoundary>} />)}
           {notFound && <Route path="*" element={<notFound.Page />} />}
         </Routes>
       </main>

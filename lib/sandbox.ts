@@ -108,6 +108,10 @@ export async function validateFiles(id: string, paths: string[]): Promise<string
   const web = paths.filter((p) => p.startsWith("web/"));
   for (const path of web.filter((p) => p.endsWith(".jsx") || p.endsWith(".js"))) {
     const code = readFileSync(join(dir, path), "utf8");
+    // An effect without braces returns its expression; scrollTo and friends return Promises now, which crashes React
+    if (/useEffect\(\s*\(\)\s*=>\s*[^{\s]/.test(code)) {
+      problems.push(`${path} has a useEffect whose arrow function returns a value (useEffect(() => something())). Use braces: useEffect(() => { something(); }, [...]). A returned value crashes the page.`);
+    }
     for (const m of code.matchAll(/(?:^|\n)\s*import\s[^;]*?from\s*["']([^"']+)["']/g)) {
       if (!m[1].startsWith(".") && !FRONTEND_PACKAGES.test(m[1])) {
         problems.push(`${path} imports "${m[1]}", which isn't installed. Use react, react-router-dom, lucide-react, recharts, clsx or ../components/ui.jsx.`);

@@ -89,6 +89,7 @@ export default function ProjectDetail() {
   text-danger text-ok`, with opacity like `bg-brand/10`; fonts `font-head`; radius `rounded-theme`. Dark mode just works.
 - Charts (dashboards): `recharts` (`ResponsiveContainer`, `AreaChart`, `BarChart`, …) with `stroke="rgb(var(--brand))"`.
 - Every page handles loading, errors and empty lists (`EmptyState`), and works from 360px phones up.
+- Effects always use braces: `useEffect(() => { doThing(); }, [deps])`, never `useEffect(() => doThing(), …)`.
 - The nav and footer come from `web/src/site.js`; don't build your own.
 
 ## Theme (`web/src/theme.css`, `web/src/site.js`)
