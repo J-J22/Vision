@@ -5,6 +5,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PixelEye } from "@/components/PixelEye";
 
+// Ideas you can click to fill the input
+const EXAMPLES = ["A marketplace for second-hand laptops", "A portfolio site for my projects", "A booking app for a hair salon", "A habit tracker with a dashboard"];
+
 export default function Home() {
   const router = useRouter();
   const [value, setValue] = useState("");
@@ -44,6 +47,7 @@ export default function Home() {
 
       {/* input */}
       <div className="eye-ask">
+        <p className="eye-label">What do you want to build?</p>
         <form onSubmit={handleSubmit} className="eye-form">
           <label htmlFor="vision-input" className="sr-only">
             Describe the app you want to build
@@ -59,9 +63,16 @@ export default function Home() {
             disabled={busy}
           />
           <button type="submit" className="eye-btn" disabled={busy || !value.trim()}>
-            {busy ? "..." : "Enter"}
+            {busy ? "..." : "Build →"}
           </button>
         </form>
+        <div className="eye-examples">
+          {EXAMPLES.map((ex) => (
+            <button key={ex} type="button" className="eye-chip" onClick={() => setValue(ex)} disabled={busy}>
+              {ex}
+            </button>
+          ))}
+        </div>
         {error ? (
           <p className="eye-hint" style={{ color: "var(--red)" }}>{error}</p>
         ) : (
