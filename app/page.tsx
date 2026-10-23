@@ -73,11 +73,7 @@ export default function Home() {
             </button>
           ))}
         </div>
-        {error ? (
-          <p className="eye-hint" style={{ color: "var(--red)" }}>{error}</p>
-        ) : (
-          <p className="eye-hint">It sees everything you do. Tell it what you want to build.</p>
-        )}
+        {error && <p className="eye-hint" style={{ color: "var(--red)" }}>{error}</p>}
       </div>
     </section>
   );
