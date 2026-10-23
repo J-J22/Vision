@@ -62,6 +62,8 @@ Follow these project rules exactly:
 
 {{CONVENTIONS}}
 
+If the plan or master prompt says a field is "required" but it isn't in the Required core API, store it with a default
+and don't reject requests without it: the core API rules win, because the automatic tests send only those fields.
 Write complete files, never placeholders or "...". Return {"files": [{"path": "...", "content": "..."}], "note": "..."}.`;
 
 const FRONTEND_SYSTEM = `${TEAM}

@@ -43,6 +43,8 @@ Validate every input: required strings must be non-empty after trimming; titles 
 
 Every marketplace must have these, with these exact paths and field names. Add more endpoints for the Blueprint's other features.
 
+**Extra fields are always optional.** You may add columns and body fields for this app (ISBN, author, condition, size, delivery…), but a request with only the fields listed below must still succeed: give every extra column a default (`DEFAULT ''`, `DEFAULT NULL`, or a sensible value) and never return "missing field" for one. The automatic tests send only the fields below.
+
 **Listings** table `listings`: `id, seller_id, title, description, price_cents, quantity, status ('active' | 'sold'), created_at`
 
 | Endpoint | Rules |

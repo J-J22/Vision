@@ -131,7 +131,17 @@ async function run(build: Build) {
 
       // One fix task per backend file the QA agent pointed at; default to the core API files
       const files = report.fixes.length ? [...new Set(report.fixes.map((f) => f.file))] : ["routes/010_listings.js", "routes/020_orders.js"];
-      const failureText = failures.map((f) => `- ${f.name}: ${f.detail}`).join("\n");
+      let failureText = failures.map((f) => `- ${f.name}: ${f.detail}`).join("\n");
+      // The common first-run failure: the app made its own extra fields (ISBN, delivery method…) required, so every
+      // test that creates a listing or an order is refused. Fixing one field per round never finishes, so name the whole rule.
+      if (failures.some((f) => /returned 400|got 400[^\n]*required/i.test(f.detail ?? ""))) {
+        failureText +=
+          "\nRoot cause: the app rejects requests that send only the core fields. The tests send ONLY these bodies:" +
+          " POST /api/listings { title, description, price_cents, quantity }; POST /api/orders { listing_id } (quantity optional);" +
+          " POST /api/payments/confirm { order_id, payment_id }. Make EVERY other field optional in one go: remove all 'X is required'" +
+          " checks for them, and when inserting use a default for any that are missing ('' for text, 0 for numbers, or a sensible" +
+          " choice such as the first delivery option), so NOT NULL columns still work. Keep the core validation rules.";
+      }
       for (const file of files) {
         const owner = build.tasks.find((t) => t.files.includes(file));
         const fixTask: Task = {

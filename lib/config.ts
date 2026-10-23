@@ -11,5 +11,6 @@ export const config = {
     maxRounds: Number(process.env.VISION_MAX_ROUNDS ?? 2),
     maxQuestionsPerRound: 5,
   },
-  fixRetries: 1,
+  // Each fix round takes ~15-25s; real runs needed 2-3 rounds (one fixes extra required fields, the next a logic bug)
+  fixRetries: Number(process.env.VISION_FIX_RETRIES ?? 3),
 };
