@@ -43,12 +43,15 @@ a login page at /login, shared JS helpers and base CSS. Agents add files:
    auth: "public" (anyone), "login" (any logged-in user), "owner" (only the user who created it; 403 for others).
    Use :id in paths. Lists return { items }. Keep it to what the MVP needs (usually 4-14 endpoints).
    A purely informational site may need only a few endpoints (e.g. a contact form, admin-editable content).
+   If people sign in to create or manage things (sellers, hosts, members, owners), plan a dashboard: a stats endpoint
+   such as GET /api/dashboard [login] -> { stats: {...}, recent: [...], series: [{ label, value }] } for their own data,
+   and a dashboard page with stat cards, a chart and recent activity. If there's an admin role, an admin page too.
 2. "tasks": who builds what.
    - T1 is always {"agent": "frontend", "title": "Theme and navigation", "files": ["public/theme.css", "public/site.js"]}.
    - Then backend tasks (1-2 files each: SQL + route for one area), then frontend pages (1-2 pages each).
    - The home page public/index.html belongs to exactly one frontend task.
    - dependsOn lists only ids of earlier tasks. Pages depend on the backend tasks whose API they call.
-   - Every file belongs to exactly one task. At most 12 tasks. Skip features marked mvp: false.
+   - Every file belongs to exactly one task. At most 14 tasks. Skip features marked mvp: false.
 Return {"api": [...], "tasks": [{"id": "T1", "agent": "frontend", "title": "...", "dependsOn": [], "files": ["..."]}, ...]}`;
 
 const THEME_TASK: Omit<Task, "status"> = { id: "T1", agent: "frontend", title: "Theme and navigation", dependsOn: [], files: ["public/theme.css", "public/site.js"] };

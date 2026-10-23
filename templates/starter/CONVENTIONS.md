@@ -52,11 +52,15 @@ wrote from it. Build exactly those endpoints: same methods, paths, field names a
 
 ## Pages
 
-- Every page's `<head>` has, in this order: `<script src="https://cdn.tailwindcss.com/3.4.16"></script><script src="/tw.js"></script>`
+- Every page's `<head>` has `<meta name="description" content="…">` written for that page, `<link rel="icon" href="/favicon.svg">`,
+  one `<h1>` per page, semantic tags (header, main, section, footer) and alt text on every image. Then, in this order: `<script src="https://cdn.tailwindcss.com/3.4.16"></script><script src="/tw.js"></script>`
   `<link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/theme.css">`. At the end of `<body>`:
   `<script src="/site.js"></script><script src="/app.js"></script>`, then your script, which calls `renderNav(); renderFooter();`.
 - Tailwind utility classes are available (no reset). Theme colors: `bg-brand text-brand bg-accent bg-card text-muted border-line`,
   fonts `font-head`, radius `rounded-theme`. Use Tailwind for layout and sections; keep the base classes for forms and buttons.
+- Charts (dashboards): add `<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>` to that
+  page's `<head>` and draw with `new Chart(canvas, …)` using the theme's colors (read them with getComputedStyle).
+  Dashboards: stat cards on top, a chart, then recent activity; all of it the signed-in user's own data.
 - Photos: `https://picsum.photos/seed/<word>/<w>/<h>` (e.g. `https://picsum.photos/seed/laptop/800/500`) always loads; pick a
   seed word that fits. Icons: small inline SVGs (Lucide/Heroicons style, `stroke="currentColor"`), never emoji as icons.
 - Use the helpers: `api(path, { method, body })` (sends the login token, throws `Error(message)` on failure), `currentUser()`,

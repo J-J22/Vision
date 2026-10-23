@@ -9,6 +9,12 @@ import { requireAuth, optionalAuth } from "./lib/auth.js";
 const root = dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json({ limit: "1mb" }));
+app.disable("x-powered-by");
+// Basic security headers (framing stays allowed: Vision shows the app in a preview frame)
+app.use((req, res, next) => {
+  res.set({ "X-Content-Type-Options": "nosniff", "Referrer-Policy": "strict-origin-when-cross-origin", "Permissions-Policy": "camera=(), microphone=(), geolocation=()" });
+  next();
+});
 
 runMigrations(join(root, "db"));
 
@@ -22,6 +28,7 @@ for (const file of readdirSync(join(root, "routes")).filter((f) => f.endsWith(".
 app.use(express.static(join(root, "public"), { extensions: ["html"] }));
 
 app.use("/api", (req, res) => res.status(404).json({ error: `No endpoint ${req.method} ${req.originalUrl}` }));
+app.use((req, res) => res.status(404).sendFile(join(root, "public", "404.html")));
 
 // Errors always come back as JSON, never as an HTML stack trace
 app.use((err, req, res, next) => {
