@@ -1,53 +1,33 @@
 "use client";
-// AI parts: plug in API keys (stored encrypted on this server) and choose which AI sits in each position of the flow.
-// Any AI can go anywhere; Vision recommends parts and warns when one is underpowered for its position.
+// Connect your AI: plug in free API keys (checked, then stored encrypted on this server), and optionally
+// choose which AI does each step. Any AI can go anywhere; Vision warns when one is underpowered.
 import { useEffect, useState } from "react";
 import { Shell } from "@/components/Shell";
 
 type Verdict = { level: "ok" | "bottleneck" | "wont-fit" | "unknown"; text: string };
-type Rating = { coding: number; reasoning: number; speed: number; context?: number } | null;
-type ChainPart = { part: string; provider: string; model: string; verdict: Verdict; rating: Rating; tokens: number };
+type ChainPart = { part: string; provider: string; model: string; verdict: Verdict };
 type Provider = {
   id: string;
   name: string;
   keyUrl: string;
   goodAt: string;
-  limits: string;
   status: { source: "dashboard" | "env" | "none"; last4?: string };
-  models: { id: string; context?: number; rated: boolean }[];
+  models: { id: string; rated: boolean }[];
 };
-type Slot = {
-  id: string;
-  stage: string;
-  title: string;
-  job: string;
-  needs: { coding?: number; reasoning?: number; speed?: number; context?: number };
-  chosen: string | null;
-  recommended: string | null;
-  chain: ChainPart[];
-  wants: string[];
-};
+type Slot = { id: string; stage: string; title: string; job: string; chosen: string | null; recommended: string | null; chain: ChainPart[]; wants: string[] };
 type Parts = { providers: Provider[]; slots: Slot[] };
 
 const STAGES: [string, string][] = [
-  ["discovery", "Discovery room"],
-  ["council", "Agent council"],
-  ["master", "Master prompt"],
-  ["build", "Build team"],
+  ["discovery", "Discovery"],
+  ["council", "Council"],
+  ["master", "Plan"],
+  ["build", "Build"],
 ];
 
-const VERDICT_CHIP: Record<Verdict["level"], [string, string]> = {
-  ok: ["green", "Compatible"],
-  bottleneck: ["amber", "Not enough power"],
-  "wont-fit": ["red", "Won't fit"],
-  unknown: ["", "Unrated"],
-};
+// Model ids are long ("deepseek-ai/deepseek-v4-pro"); show the readable end
+const short = (model: string) => model.split("/").pop() ?? model;
 
-function needsText(n: Slot["needs"]) {
-  return [n.coding && `Coding ${n.coding}+`, n.reasoning && `Reasoning ${n.reasoning}+`, n.speed && `Speed ${n.speed}+`, n.context && `Reads ${Math.round(n.context / 1000)}k+`].filter(Boolean) as string[];
-}
-
-function KeyForm({ provider, onSaved, where = "", compact = false }: { provider: Provider; onSaved: (d: Parts) => void; where?: string; compact?: boolean }) {
+function Connect({ provider, onDone, onCancel }: { provider: Provider; onDone: (d: Parts) => void; onCancel: () => void }) {
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -60,29 +40,31 @@ function KeyForm({ provider, onSaved, where = "", compact = false }: { provider:
     const d = await r.json();
     setBusy(false);
     if (d.error) return setError(d.error);
-    setKey("");
-    onSaved(d);
+    onDone(d);
   }
 
   return (
-    <form className="keyform" onSubmit={save}>
-      <div className="row" style={{ flexWrap: "nowrap" }}>
+    <form className="connect" onSubmit={save}>
+      <p className="small muted">
+        1. Get a free key from <a href={provider.keyUrl} target="_blank" rel="noreferrer">{provider.name} ↗</a>
+        <br />2. Paste it here. It&apos;s checked, then stored encrypted on this computer.
+      </p>
+      <div className="connect-row">
         <input
-          id={`key-${provider.id}${where ? `-${where}` : ""}`}
+          id={`key-${provider.id}`}
           type="password"
           autoComplete="off"
           spellCheck={false}
-          placeholder={`Paste your ${provider.name.split(" ")[0]} key`}
+          autoFocus
+          placeholder="Paste your key"
           value={key}
           onChange={(e) => setKey(e.target.value)}
           aria-label={`${provider.name} API key`}
         />
-        <button className="btn" type="submit" disabled={busy || key.trim().length < 10}>{busy ? "Checking…" : "Plug in"}</button>
+        <button className="btn" type="submit" disabled={busy || key.trim().length < 10}>{busy ? "Checking…" : "Connect"}</button>
       </div>
-      {error && <span className="small" style={{ color: "var(--red)" }}>{error}</span>}
-      {!compact && (
-        <a className="small" href={provider.keyUrl} target="_blank" rel="noreferrer">Get a free {provider.name.split(" ")[0]} key ↗</a>
-      )}
+      {error && <p className="small" style={{ color: "var(--red)" }}>{error}</p>}
+      <button type="button" className="linkish" onClick={onCancel}>Cancel</button>
     </form>
   );
 }
@@ -90,16 +72,11 @@ function KeyForm({ provider, onSaved, where = "", compact = false }: { provider:
 export default function PartsPage() {
   const [data, setData] = useState<Parts | null>(null);
   const [problem, setProblem] = useState("");
+  const [open, setOpen] = useState<string | null>(null); // provider being connected
+  const [changing, setChanging] = useState<string | null>(null); // slot being changed
 
-  async function load() {
-    try {
-      setData(await (await fetch("/api/parts")).json());
-    } catch {
-      setProblem("Couldn't reach Vision. Is `npm run dev` running?");
-    }
-  }
   useEffect(() => {
-    load();
+    fetch("/api/parts").then((r) => r.json()).then(setData).catch(() => setProblem("Couldn't reach Vision. Is it running?"));
   }, []);
 
   async function post(body: object) {
@@ -110,122 +87,101 @@ export default function PartsPage() {
     setData(d);
   }
 
-  if (!data) return <Shell project={null} page="parts">{problem ? <div className="error-box">{problem}</div> : <p className="muted">Loading AI parts…</p>}</Shell>;
+  if (!data) return <Shell project={null} page="parts">{problem ? <div className="error-box">{problem}</div> : <p className="muted">Loading…</p>}</Shell>;
 
-  const byId = Object.fromEntries(data.providers.map((p) => [p.id, p]));
   const connected = data.providers.filter((p) => p.status.source !== "none");
+  const byId = Object.fromEntries(data.providers.map((p) => [p.id, p]));
+  const issues = data.slots.filter((s) => !s.chain[0] || s.chain[0].verdict.level !== "ok").length;
 
   return (
     <Shell project={null} page="parts">
-      <div className="stack" style={{ gap: 6 }}>
-        <span className="label neon"><span className="led" /> Assembly // AI parts</span>
-        <h1>Plug in your AIs</h1>
-        <p className="muted" style={{ maxWidth: 720 }}>
-          Every box in Vision&apos;s flow is a position for an AI. Plug in free keys below, and Vision puts the best part in each position.
-          You can put any AI anywhere; Vision tells you when one is underpowered for its job.
-        </p>
-      </div>
-      {problem && <div className="error-box"><span className="grow">{problem}</span><button className="btn ghost" onClick={() => setProblem("")}>Dismiss</button></div>}
-
-      <section className="stack">
-        <span className="label">// Power: API keys ({connected.length} of {data.providers.length} plugged in)</span>
-        <div className="provgrid">
-          {data.providers.map((p) => (
-            <article key={p.id} className={`panel ${p.status.source !== "none" ? "glow" : ""}`}>
-              <div className="panel-head">
-                <h3>{p.name}</h3>
-                {p.status.source === "none" ? <span className="chip">Not plugged in</span> : <span className="chip green"><span className="led" />Connected</span>}
-              </div>
-              <p className="small muted">{p.goodAt}</p>
-              <span className="label">{p.limits || "No per-minute cap"}</span>
-              {p.status.source === "none" ? (
-                <KeyForm provider={p} onSaved={setData} />
-              ) : (
-                <div className="row" style={{ justifyContent: "space-between" }}>
-                  <span className="small">
-                    Key ••••{p.status.last4} · {p.status.source === "dashboard" ? "saved here, encrypted" : "from .env.local"} · {p.models.length} models
-                  </span>
-                  {p.status.source === "dashboard" && <button className="btn ghost" onClick={() => post({ action: "remove-key", provider: p.id })}>Unplug</button>}
-                </div>
-              )}
-            </article>
-          ))}
+      <div className="calm">
+        <div className="calm-head">
+          <h1>Connect your AI</h1>
+          <p className="muted">Vision runs on free AI services. Connect one to start; each extra one makes Vision faster and smarter.</p>
         </div>
-      </section>
+        {problem && <div className="error-box"><span className="grow">{problem}</span><button className="linkish" onClick={() => setProblem("")}>Dismiss</button></div>}
 
-      {STAGES.map(([stage, name]) => (
-        <section key={stage} className="stack">
-          <span className="label">// {name}</span>
-          <div className="slotgrid">
-            {data.slots.filter((s) => s.stage === stage).map((s) => {
-              const active = s.chain[0];
-              const [chipClass, chipText] = active ? VERDICT_CHIP[active.verdict.level] : ["red", "Empty"];
-              const missing = s.wants.map((id) => byId[id]).filter(Boolean);
-              return (
-                <article key={s.id} className={`panel slot ${active ? active.verdict.level : "empty"}`}>
-                  <div className="panel-head">
-                    <div className="stack" style={{ gap: 2 }}>
-                      <h3>{s.title}</h3>
-                      <span className="small muted">{s.job}</span>
-                    </div>
-                    <span className={`chip ${chipClass}`}>{chipText}</span>
+        <section className="calm-list" aria-label="AI services">
+          {data.providers.map((p, i) => {
+            const on = p.status.source !== "none";
+            return (
+              <div key={p.id} className={`prov ${on ? "on" : ""}`}>
+                <div className="prov-row">
+                  <span className="prov-mark" aria-hidden="true">{p.name[0]}</span>
+                  <div className="grow">
+                    <b>{p.name}</b>
+                    {!on && i === 0 && connected.length === 0 && <span className="prov-tag">Start here</span>}
+                    <p className="small muted">{p.goodAt}</p>
                   </div>
-                  <div className="row" style={{ gap: 6 }}>
-                    {needsText(s.needs).map((n) => <span key={n} className="chip">{n}</span>)}
-                  </div>
-
-                  {active ? (
-                    <div className="part">
-                      <span className="label">In this position{s.chosen ? " (your pick)" : ""}</span>
-                      <b className="mono">{byId[active.provider]?.name.split(" ")[0]} · {active.model}</b>
-                      {active.rating && <span className="small muted">Coding {active.rating.coding}/5 · Reasoning {active.rating.reasoning}/5 · Speed {active.rating.speed}/5{active.tokens ? ` · ${active.tokens.toLocaleString()} tokens used` : ""}</span>}
-                      {active.verdict.level !== "ok" && <span className="small" style={{ color: active.verdict.level === "wont-fit" ? "var(--red)" : active.verdict.level === "bottleneck" ? "var(--amber)" : "var(--muted)" }}>{active.verdict.text}</span>}
+                  {on ? (
+                    <div className="prov-on">
+                      <span className="small">✓ Connected <span className="muted">····{p.status.last4}</span></span>
+                      {p.status.source === "dashboard" ? (
+                        <button className="linkish" onClick={() => post({ action: "remove-key", provider: p.id })}>Disconnect</button>
+                      ) : (
+                        <span className="small muted">from .env.local</span>
+                      )}
                     </div>
-                  ) : (
-                    <p className="small" style={{ color: "var(--red)" }}>No AI can run this position yet. Plug in a key.</p>
-                  )}
-
-                  {s.chosen && s.recommended && s.chosen !== s.recommended && (
-                    <button className="btn ghost" onClick={() => post({ action: "choose", slot: s.id, part: null })}>Use recommended: {s.recommended.split(":").slice(1).join(":")}</button>
-                  )}
-
-                  {connected.length > 0 && (
-                    <select
-                      id={`slot-${s.id}`}
-                      className="partpick"
-                      value=""
-                      onChange={(e) => e.target.value && post({ action: "choose", slot: s.id, part: e.target.value })}
-                      aria-label={`Put another AI in ${s.title}`}
-                    >
-                      <option value="">Put another AI here…</option>
-                      {connected.map((p) => (
-                        <optgroup key={p.id} label={p.name}>
-                          {p.models.map((m) => (
-                            <option key={m.id} value={`${p.id}:${m.id}`}>{m.id}{`${p.id}:${m.id}` === s.recommended ? "  ★ recommended" : m.rated ? "" : "  (unrated)"}</option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  )}
-
-                  {s.chain.length > 1 && (
-                    <span className="small muted">Spares if it fails: {s.chain.slice(1, 4).map((c) => c.model).join(", ")}</span>
-                  )}
-
-                  {missing.length > 0 && (
-                    <details className="inline-key">
-                      <summary className="small">Recommended here too: {missing.map((p) => p.name.split(" ")[0]).join(", ")}. Plug in a key</summary>
-                      <div className="stack" style={{ gap: 8, marginTop: 8 }}>
-                        {missing.map((p) => <KeyForm key={p.id} provider={p} onSaved={setData} where={s.id} compact />)}
-                      </div>
-                    </details>
-                  )}
-                </article>
-              );
-            })}
-          </div>
+                  ) : open !== p.id ? (
+                    <button className="btn ghost" onClick={() => setOpen(p.id)}>Connect</button>
+                  ) : null}
+                </div>
+                {!on && open === p.id && <Connect provider={p} onDone={(d) => { setData(d); setOpen(null); }} onCancel={() => setOpen(null)} />}
+              </div>
+            );
+          })}
         </section>
-      ))}
+
+        {connected.length > 0 && (
+          <details className="calm-more">
+            <summary>
+              <b>Who does what</b>
+              <span className="muted"> · Vision picks the best AI for each step{issues ? ` · ${issues} could be stronger` : ""}</span>
+            </summary>
+            {STAGES.map(([stage, name]) => (
+              <div key={stage} className="who">
+                <span className="label">{name}</span>
+                {data.slots.filter((s) => s.stage === stage).map((s) => {
+                  const a = s.chain[0];
+                  const level = a ? a.verdict.level : "wont-fit";
+                  return (
+                    <div key={s.id} className="who-row">
+                      <div className="who-main">
+                        <i className={`dot ${level}`} aria-hidden="true" />
+                        <span className="grow" title={s.job}>{s.title}</span>
+                        <span className="small muted who-ai">{a ? `${byId[a.provider]?.name} · ${short(a.model)}` : "No AI yet"}</span>
+                        <button className="linkish" onClick={() => setChanging(changing === s.id ? null : s.id)}>{changing === s.id ? "Close" : "Change"}</button>
+                      </div>
+                      {a && level !== "ok" && <p className="small who-note">{a.verdict.text}</p>}
+                      {changing === s.id && (
+                        <div className="who-change">
+                          <select
+                            id={`slot-${s.id}`}
+                            value=""
+                            onChange={(e) => { if (e.target.value) { post({ action: "choose", slot: s.id, part: e.target.value }); setChanging(null); } }}
+                            aria-label={`Choose the AI for ${s.title}`}
+                          >
+                            <option value="">Choose an AI…</option>
+                            {connected.map((p) => (
+                              <optgroup key={p.id} label={p.name}>
+                                {p.models.map((m) => (
+                                  <option key={m.id} value={`${p.id}:${m.id}`}>{short(m.id)}{`${p.id}:${m.id}` === s.recommended ? "  · recommended" : ""}</option>
+                                ))}
+                              </optgroup>
+                            ))}
+                          </select>
+                          {s.chosen && <button className="linkish" onClick={() => { post({ action: "choose", slot: s.id, part: null }); setChanging(null); }}>Back to recommended</button>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </details>
+        )}
+      </div>
     </Shell>
   );
 }

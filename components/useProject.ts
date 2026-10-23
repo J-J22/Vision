@@ -64,10 +64,10 @@ export function useProject(id: string) {
 }
 
 export const STAGES: { stage: Stage; tag: string; name: string; path: string }[] = [
-  { stage: "discovery", tag: "[DISC]", name: "Discovery room", path: "discovery" },
-  { stage: "council", tag: "[CNCL]", name: "Agent council", path: "council" },
-  { stage: "master", tag: "[SPEC]", name: "Master prompt", path: "master" },
-  { stage: "build", tag: "[SDLC]", name: "Build pipeline", path: "build" },
+  { stage: "discovery", tag: "[DISC]", name: "Discovery", path: "discovery" },
+  { stage: "council", tag: "[CNCL]", name: "Council", path: "council" },
+  { stage: "master", tag: "[SPEC]", name: "Plan", path: "master" },
+  { stage: "build", tag: "[SDLC]", name: "Build", path: "build" },
 ];
 
 // The furthest stage this project has reached (discovery repeats between council rounds)
