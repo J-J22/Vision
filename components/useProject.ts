@@ -31,9 +31,13 @@ export function useProject(id: string) {
 
   useEffect(() => {
     let source: EventSource | null = null;
+    // If the page unmounts before the fetch returns, don't open the stream: nothing would ever close it,
+    // and leaked streams fill the browser's 6 connections per host, so answers queue until a reload.
+    let closed = false;
     fetch(`/api/projects/${id}`)
       .then((r) => r.json())
       .then((d) => {
+        if (closed) return;
         if (d.error) return setProblem(d.error);
         setProject(d);
         source = new EventSource(`/api/projects/${id}/events`);
@@ -42,7 +46,10 @@ export function useProject(id: string) {
         source.onopen = () => setProblem("");
       })
       .catch(() => setProblem("Couldn't reach Vision. Is `npm run dev` running?"));
-    return () => source?.close();
+    return () => {
+      closed = true;
+      source?.close();
+    };
   }, [id]);
 
   const act = useCallback(
