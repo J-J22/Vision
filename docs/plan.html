@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>AI Build Team Plan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single reading column like an engineering plan; stages, tables and team get wider, structured treatment */
+:root {
+  --bg: #f6f8f8;
+  --surface: #ffffff;
+  --fg: #142322;
+  --muted: #566a68;
+  --line: #d9e2e1;
+  --accent: #0d6b66;
+  --accent-soft: #e2f1ef;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --ok: #2f6b2a;
+  --ok-soft: #e5f2e1;
+  --info: #2c5a8a;
+  --info-soft: #e3ecf6;
+  --open: #a33a2c;
+  --open-soft: #f9e6e2;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Manrope", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1716; --surface: #16211f; --fg: #e3ecea; --muted: #93a8a5; --line: #283735;
+    --accent: #5cc4bb; --accent-soft: #173533; --warn: #e9b35c; --warn-soft: #3a2c13;
+    --ok: #8ccf83; --ok-soft: #1c3119; --info: #8db8e6; --info-soft: #18283a;
+    --open: #ef9585; --open-soft: #3b1d18; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1716; --surface: #16211f; --fg: #e3ecea; --muted: #93a8a5; --line: #283735;
+  --accent: #5cc4bb; --accent-soft: #173533; --warn: #e9b35c; --warn-soft: #3a2c13;
+  --ok: #8ccf83; --ok-soft: #1c3119; --info: #8db8e6; --info-soft: #18283a;
+  --open: #ef9585; --open-soft: #3b1d18; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 48px 80px;
+}
+.wrap { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 60px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.6rem; font-weight: 700; }
+h3 { font-size: 1.1rem; font-weight: 600; }
+p { margin: 0; max-width: 65ch; }
+code { font-family: var(--font-mono); font-size: 0.86em; }
+.eyebrow {
+  font-family: var(--font-mono); font-size: 0.75rem; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--accent); font-weight: 500;
+}
+section { display: flex; flex-direction: column; gap: 18px; }
+.lede { font-size: 1.15rem; color: var(--muted); }
+.muted { color: var(--muted); }
+
+header { display: flex; flex-direction: column; gap: 16px; padding-bottom: 32px; border-bottom: 1px solid var(--line); }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+
+/* Stage strip */
+.stages { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.stage {
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px 12px 14px;
+  background: var(--surface); display: flex; flex-direction: column; gap: 4px; min-width: 0;
+}
+.stage b { font-family: var(--font-mono); font-weight: 500; font-size: 0.72rem; color: var(--muted); }
+.stage strong { font-family: var(--font-display); font-size: 1rem; font-weight: 600; }
+.stage span { font-size: 0.84rem; color: var(--muted); line-height: 1.45; }
+.stage.now { border-color: var(--accent); background: var(--accent-soft); }
+.stage.now b { color: var(--accent); }
+
+/* Naming box */
+.names { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.names div { padding: 14px 18px; border-bottom: 1px solid var(--line); min-width: 0; }
+.names div:nth-child(odd) { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); border-right: 1px solid var(--line); }
+.names div:nth-last-child(-n+2) { border-bottom: 0; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+td:first-child { font-weight: 600; white-space: nowrap; }
+td.mono-col { font-family: var(--font-mono); font-size: 0.82rem; color: var(--accent); white-space: nowrap; font-weight: 500; }
+
+/* Levels */
+.levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.level { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.level .who { font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.level .who.b { color: var(--ok); } .level .who.m { color: var(--info); } .level .who.e { color: var(--warn); }
+.level p { font-size: 0.93rem; }
+
+/* Pipeline */
+.pipeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.pipeline li { display: grid; grid-template-columns: 34px 1fr; gap: 16px; position: relative; padding-bottom: 20px; }
+.pipeline li:not(:last-child)::before {
+  content: ""; position: absolute; left: 16px; top: 34px; bottom: 0; width: 2px; background: var(--line);
+}
+.pipeline .n {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: 0.82rem; font-weight: 500;
+  background: var(--surface); border: 2px solid var(--accent); color: var(--accent);
+}
+.pipeline .body { display: flex; flex-direction: column; gap: 4px; padding-top: 5px; min-width: 0; }
+.pipeline .body p { color: var(--muted); font-size: 0.95rem; }
+.loopnote { font-family: var(--font-mono); font-size: 0.78rem; color: var(--warn); }
+
+/* Team grid */
+.team { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.agent { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.agent .role { font-family: var(--font-mono); font-size: 0.82rem; color: var(--accent); font-weight: 500; }
+.agent p { font-size: 0.9rem; color: var(--muted); }
+
+/* Rules */
+.rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
+.rule { border-top: 2px solid var(--accent); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rule p { color: var(--muted); font-size: 0.94rem; }
+
+/* Task board example */
+.board { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 10px; overflow-x: auto; }
+.task { display: grid; grid-template-columns: 70px minmax(0, 1fr) 120px 110px; gap: 12px; align-items: center; font-size: 0.88rem; padding: 8px 0; border-bottom: 1px solid var(--line); min-width: 560px; }
+.task:last-child { border-bottom: 0; }
+.task .id { font-family: var(--font-mono); color: var(--muted); font-size: 0.8rem; }
+.task .owner { font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent); }
+.chip { font-family: var(--font-mono); font-size: 0.74rem; padding: 3px 9px; border-radius: 999px; justify-self: start; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.info { background: var(--info-soft); color: var(--info); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.open { background: var(--open-soft); color: var(--open); }
+.board .dep { font-size: 0.8rem; color: var(--muted); }
+
+/* Edge cases */
+.edges { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.edge { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 10px 14px; font-size: 0.9rem; min-width: 0; }
+.edge b { display: block; font-family: var(--font-mono); font-size: 0.72rem; font-weight: 500; color: var(--open); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+
+ul.plain { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; max-width: 65ch; }
+ul.plain li::marker { color: var(--accent); }
+
+.callout { background: var(--accent-soft); border-radius: 8px; padding: 16px 18px; font-size: 0.95rem; }
+.callout p { max-width: none; }
+
+/* Decisions */
+.decisions { display: flex; flex-direction: column; gap: 12px; }
+.decision { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 6px; }
+.decision .lean { font-size: 0.9rem; color: var(--muted); }
+.decision .lean b { color: var(--fg); font-weight: 600; }
+
+footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 20px; }
+
+@media (max-width: 720px) {
+  .stages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .levels, .team, .rules, .edges, .decision, .names { grid-template-columns: 1fr; }
+  .names div:nth-child(odd) { border-right: 0; border-bottom: 0; padding-bottom: 2px; }
+  .names div:nth-child(even) { padding-top: 2px; }
+  body { padding-block: 32px 56px; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">Project plan · draft v2</span>
+  <h1>An AI team that builds your app, from first conversation to live website</h1>
+  <p class="lede">You describe the app you want, for example a marketplace. AI agents first get to know you and interview you in language that fits your level. Then they split the work like a real dev team, coordinate as coworkers, test and break the app on purpose, fix what fails, and deploy it.</p>
+  <div class="meta"><span>October 2026</span><span>Running example: a marketplace app</span><span>Now building: Stage 1</span></div>
+</header>
+
+<section>
+  <span class="eyebrow">How it works</span>
+  <h2>Five stages</h2>
+  <div class="stages">
+    <div class="stage now"><b>Stage 1 · now</b><strong>Discovery</strong><span>Get to know the user, brainstorm, cover every technical detail</span></div>
+    <div class="stage"><b>Stage 2</b><strong>Blueprint</strong><span>One complete technical plan everyone builds from</span></div>
+    <div class="stage"><b>Stage 3</b><strong>Team build</strong><span>Agents take tasks and work together like coworkers</span></div>
+    <div class="stage"><b>Stage 4</b><strong>Test &amp; break</strong><span>Edge cases, attacks, debugging until it holds up</span></div>
+    <div class="stage"><b>Stage 5</b><strong>Deploy</strong><span>Staging, then live, with monitoring and rollback</span></div>
+  </div>
+  <p>All of this runs inside a <b>sandbox</b>: an isolated workspace with its own code repo, database, test servers and task board, so agents can build and break things safely before anything goes live.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Plain-language names</span>
+  <h2>What the terms mean</h2>
+  <div class="names">
+    <div>Discovery</div><div>The interview and brainstorm. Earlier drafts called it the "spec refiner".</div>
+    <div>Blueprint</div><div>The full technical plan for the app: features, pages, database, APIs, login, payments, hosting. Engineers call this a "spec".</div>
+    <div>Agent</div><div>One AI with one job, such as backend developer or tester.</div>
+    <div>Orchestrator</div><div>The AI project manager. It assigns tasks and tracks who is waiting on whom.</div>
+    <div>Sandbox</div><div>A safe, isolated workspace where agents build and test.</div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Stage 1 · Discovery</span>
+  <h2>Interview the user, at their level</h2>
+  <p>Discovery starts with the person, not the app. The first few questions find out who they are, and every question after that adapts to their answers.</p>
+  <ul class="plain">
+    <li>What do you do? (founder, student, developer, designer, business owner)</li>
+    <li>Have you built or launched an app before? Do you code?</li>
+    <li>Who is the app for, and what problem does it solve?</li>
+    <li>Budget, deadline, and whether you have a preferred tech stack</li>
+  </ul>
+  <h3>The same question, asked three ways</h3>
+  <div class="levels">
+    <div class="level"><span class="who b">Non-technical</span><p>"When a buyer pays, should the money go straight to the seller, or should your platform hold it until the buyer confirms they got the item?"</p></div>
+    <div class="level"><span class="who m">Some tech</span><p>"Do you want escrow-style payments with delayed payouts to sellers, or instant transfers? This affects which Stripe setup we use."</p></div>
+    <div class="level"><span class="who e">Developer</span><p>"Stripe Connect Express with manual payouts and an order-confirmation webhook, or direct charges? Any platform fee model?"</p></div>
+  </div>
+  <p>When a topic is deep, the agent explains it with an everyday example first, offers choices, and marks the one it recommends. Anything the user doesn't care about gets a sensible default that is written down so it can be changed later.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Stage 1 · coverage</span>
+  <h2>Everything Discovery must cover</h2>
+  <p>A full-stack website has the same checklist every time. Discovery keeps asking or defaulting until every row is filled.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Area</th><th>For a marketplace, this means</th></tr></thead>
+      <tbody>
+        <tr><td>Users &amp; roles</td><td>Buyers, sellers, admins; what each can see and do</td></tr>
+        <tr><td>Features</td><td>Listings, search and filters, cart, orders, reviews, messaging, disputes; MVP vs later</td></tr>
+        <tr><td>Pages &amp; UI</td><td>Home, listing page, seller dashboard, checkout, admin panel; web, mobile or both</td></tr>
+        <tr><td>Database</td><td>Tables for users, listings, orders, payments, reviews, messages; how they connect; image storage</td></tr>
+        <tr><td>APIs &amp; endpoints</td><td>Every endpoint (e.g. <code>POST /listings</code>, <code>GET /orders/:id</code>), who can call it, errors, pagination, rate limits</td></tr>
+        <tr><td>Login &amp; security</td><td>Email, Google or phone login; permissions; protecting personal and payment data</td></tr>
+        <tr><td>Payments</td><td>Checkout, platform fee, seller payouts, refunds, escrow</td></tr>
+        <tr><td>Integrations</td><td>Email and SMS, maps, search engine, push notifications, analytics</td></tr>
+        <tr><td>Scale &amp; speed</td><td>Expected users, peak traffic, which countries, uptime target</td></tr>
+        <tr><td>Hosting &amp; deploy</td><td>Cloud provider, staging and production, domain, SSL, automated releases</td></tr>
+        <tr><td>Monitoring</td><td>Logs, error alerts, backups</td></tr>
+        <tr><td>Legal</td><td>Terms, privacy policy, GDPR or local rules, tax on sales</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout"><p><b>App-type knowledge.</b> The system keeps a checklist for each kind of app. For a marketplace, it already knows to ask about seller verification, fake listings, refunds, disputes and reviews, even if the user never mentions them. Normal users skip these details when they copy an app. That is why this checklist matters.</p></div>
+</section>
+
+<section>
+  <span class="eyebrow">Stage 2 · Blueprint</span>
+  <h2>One plan everyone builds from</h2>
+  <p>When Discovery ends, the answers become the Blueprint. The user approves it before any code is written. Each agent then reads the part that concerns its job.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>File</th><th>What it holds</th></tr></thead>
+      <tbody>
+        <tr><td class="mono-col">blueprint.yaml</td><td>The full plan in a structured format agents can read</td></tr>
+        <tr><td class="mono-col">product.md</td><td>The same plan in plain English for the user and team</td></tr>
+        <tr><td class="mono-col">api-contract</td><td>Every endpoint with inputs and outputs (OpenAPI format)</td></tr>
+        <tr><td class="mono-col">db-schema</td><td>Tables, columns and relationships</td></tr>
+        <tr><td class="mono-col">decisions.md</td><td>Each big choice and why it was made</td></tr>
+        <tr><td class="mono-col">assumptions.md</td><td>Every default the system picked, so the user can change any of them</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Stage 3 · Team build</span>
+  <h2>The agent team</h2>
+  <div class="team">
+    <div class="agent"><span class="role">orchestrator</span><p>Project manager. Breaks the Blueprint into tasks, assigns them, tracks dependencies.</p></div>
+    <div class="agent"><span class="role">architect</span><p>Chooses the structure and writes the API contract and DB schema.</p></div>
+    <div class="agent"><span class="role">database</span><p>Builds tables, migrations, indexes and sample data.</p></div>
+    <div class="agent"><span class="role">backend</span><p>Writes the APIs, business logic, payments and login.</p></div>
+    <div class="agent"><span class="role">frontend</span><p>Builds the pages and connects them to the APIs.</p></div>
+    <div class="agent"><span class="role">qa / tester</span><p>Writes tests and hunts for edge cases.</p></div>
+    <div class="agent"><span class="role">security</span><p>Checks login, permissions, data leaks and common attacks.</p></div>
+    <div class="agent"><span class="role">reviewer</span><p>Reviews every change before it is merged.</p></div>
+    <div class="agent"><span class="role">devops</span><p>Sets up servers, automated releases, monitoring and rollback.</p></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Stage 3 · coordination</span>
+  <h2>How agents work as coworkers</h2>
+  <div class="rules">
+    <div class="rule"><h3>Shared task board</h3><p>Every task has an owner, a status, and the tasks it depends on. Agents pick up work as soon as what it depends on is done.</p></div>
+    <div class="rule"><h3>Agree on contracts first</h3><p>The API contract and DB schema are fixed before coding. Then frontend and backend work in parallel; frontend uses fake data until the real API is ready.</p></div>
+    <div class="rule"><h3>Talk to each other</h3><p>Agents message each other directly ("the orders endpoint needs a seller_id filter"). If a change affects others, the orchestrator updates the plan.</p></div>
+    <div class="rule"><h3>Review before merge</h3><p>No agent merges its own code. The reviewer agent and the tests must both pass.</p></div>
+    <div class="rule"><h3>Shared memory</h3><p>Decisions, open problems and progress live in one place every agent can read, so nobody repeats work or contradicts the plan.</p></div>
+    <div class="rule"><h3>Ask the user when stuck</h3><p>If agents disagree or need a product decision, the question goes to the user in plain language, at their level.</p></div>
+  </div>
+  <div class="board">
+    <span class="eyebrow">Example: task board for the marketplace</span>
+    <div class="task"><span class="id">T-04</span><span>Create listings and orders tables</span><span class="owner">database</span><span class="chip ok">done</span></div>
+    <div class="task"><span class="id">T-07</span><span>Build <code>POST /orders</code> with payment hold</span><span class="owner">backend</span><span class="chip info">in progress</span></div>
+    <div class="task"><span class="id">T-09</span><span>Checkout page</span><span class="owner">frontend</span><span class="chip info">in progress · fake API</span></div>
+    <div class="task"><span class="id">T-12</span><span>Test double-purchase of the last item</span><span class="owner">qa</span><span class="chip warn">waiting on T-07</span></div>
+    <div class="task"><span class="id">T-15</span><span>Refund flow</span><span class="owner">backend</span><span class="chip open">blocked · asked user</span></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Stage 4 · Test &amp; break</span>
+  <h2>Find every edge case before users do</h2>
+  <p>The QA and security agents try to break the app on purpose. They use a library of known edge cases, plus ones specific to this app type.</p>
+  <div class="edges">
+    <div class="edge"><b>Race condition</b>Two buyers pay for the last item at the same moment</div>
+    <div class="edge"><b>Payment failure</b>Card declined halfway, webhook arrives twice, refund after payout</div>
+    <div class="edge"><b>Bad input</b>Empty fields, emoji and other scripts, 50MB image, negative price</div>
+    <div class="edge"><b>Permissions</b>A buyer edits someone else's listing by changing the ID in the URL</div>
+    <div class="edge"><b>Load</b>1,000 users search at once; slow network on mobile</div>
+    <div class="edge"><b>Abuse</b>Spam listings, fake reviews, bots, login brute force</div>
+  </div>
+  <ol class="pipeline">
+    <li><span class="n">1</span><div class="body"><h3>A test fails</h3><p>The failure, logs and steps to reproduce go on the task board.</p></div></li>
+    <li><span class="n">2</span><div class="body"><h3>The owner agent fixes it</h3><p>The agent that wrote that part debugs it and writes a test so the bug can't come back.</p></div></li>
+    <li><span class="n">3</span><div class="body"><h3>Everything reruns</h3><p>The full test suite runs again to check the fix broke nothing else.</p><span class="loopnote">↻ after 3 failed tries, escalate to the architect or the user</span></div></li>
+  </ol>
+</section>
+
+<section>
+  <span class="eyebrow">Stage 5 · Deploy</span>
+  <h2>Ship it safely</h2>
+  <ul class="plain">
+    <li>Deploy to a <b>staging</b> copy first. The user clicks through it and approves.</li>
+    <li>Then deploy to <b>production</b> with automated releases (CI/CD) and infrastructure written as code.</li>
+    <li>Monitoring and error alerts are on from day one. A bad release rolls back automatically.</li>
+    <li>After launch, real errors and feedback go back to the team as new tasks.</li>
+  </ul>
+</section>
+
+<section>
+  <span class="eyebrow">Your question</span>
+  <h2>What data and background knowledge the agents need</h2>
+  <div class="callout"><p><b>No model training needed to start.</b> Current AI models already know how to code. What they need is the right knowledge and memory handed to them at the right time. Training or fine-tuning only makes sense later, if logs show the same mistakes again and again.</p></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>What</th><th>What it is</th><th>Why the agents need it</th></tr></thead>
+      <tbody>
+        <tr><td>App-type checklists</td><td>Per app type (marketplace, social, booking…): features, edge cases, typical database tables</td><td>So Discovery asks the right questions and QA knows what to break</td></tr>
+        <tr><td>Starter templates</td><td>Tested project skeletons for the default stack: login, payments, file upload, admin panel</td><td>Agents start from working code instead of writing everything from scratch</td></tr>
+        <tr><td>Best-practice library</td><td>Docs on API design, security rules, database patterns, deployment guides</td><td>Retrieved and handed to an agent only when relevant (RAG)</td></tr>
+        <tr><td>Project memory</td><td>The Blueprint, decisions, task board and conversation history for this project</td><td>Keeps every agent consistent with the plan</td></tr>
+        <tr><td>Caches</td><td>Prompt caching for long shared context; saved results of repeated work</td><td>Cuts cost and speed by a lot, since every agent rereads the Blueprint</td></tr>
+        <tr><td>Edge-case library</td><td>Known failure scenarios by category, growing with every project</td><td>Feeds Stage 4 testing</td></tr>
+        <tr><td>Test sets (evals)</td><td>Sample vague app ideas with the answers a senior engineer would give</td><td>Measures whether a prompt change actually made the agents better</td></tr>
+        <tr><td>Run logs</td><td>What each agent did, what failed, how long it took</td><td>Shows where to improve; becomes training data later if needed</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Roadmap</span>
+  <h2>Order of building the platform</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Phase</th><th>Goal</th><th>Done when</th></tr></thead>
+      <tbody>
+        <tr><td>1 · Discovery</td><td>User profiling, adaptive questions, full coverage checklist, Blueprint output</td><td>A vague idea reliably becomes an approved Blueprint</td></tr>
+        <tr><td>2 · Single builder</td><td>One agent builds a working app from the Blueprint using starter templates</td><td>Marketplace MVP runs in the sandbox</td></tr>
+        <tr><td>3 · Team</td><td>Split into specialist agents with task board, contracts, messaging and review</td><td>Agents finish a build in parallel without stepping on each other</td></tr>
+        <tr><td>4 · Test &amp; break</td><td>QA and security agents, edge-case library, debug loop</td><td>Builds pass the edge-case suite</td></tr>
+        <tr><td>5 · Deploy</td><td>Staging, production, monitoring, rollback</td><td>One click from approved staging to a live URL</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">Building one capable agent before splitting into a team is deliberate. It is much easier to debug, and it shows exactly which jobs are worth giving to a specialist.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Phase 1 detail</span>
+  <h2>First 5 weeks</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Week</th><th>Deliverable</th></tr></thead>
+      <tbody>
+        <tr><td>Week 1</td><td>Blueprint format, coverage checklist, marketplace checklist, 20 test app ideas</td></tr>
+        <tr><td>Week 2</td><td>User-profiling questions and level-adapted question agent, in a simple chat loop</td></tr>
+        <tr><td>Week 3</td><td>Gap checker (what is still missing), consistency checker, Blueprint files</td></tr>
+        <tr><td>Week 4</td><td>Run the test ideas, tune prompts, add 3–4 more app types</td></tr>
+        <tr><td>Week 5</td><td>Web UI: chat on one side, Blueprint filling in live on the other; approval button</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Needs a team decision</span>
+  <h2>Open decisions</h2>
+  <div class="decisions">
+    <div class="decision"><h3>Default tech stack</h3><p class="lean"><b>Leaning:</b> lock one stack for v1 (e.g. Next.js, Node or FastAPI, Postgres, Docker, AWS). Agents get far more reliable when they always build with the same tools.</p></div>
+    <div class="decision"><h3>Sandbox setup</h3><p class="lean"><b>Leaning:</b> one Docker container per project with its own repo, database and test server.</p></div>
+    <div class="decision"><h3>Agent framework</h3><p class="lean"><b>Leaning:</b> plain LLM API for Phase 1; choose an orchestration approach at Phase 3 once real needs are clear.</p></div>
+    <div class="decision"><h3>Human approval points</h3><p class="lean"><b>Leaning:</b> user approves the Blueprint, staging, and every production deploy.</p></div>
+  </div>
+</section>
+
+<footer>Next step: draft the Blueprint format and the Discovery prompts (user profiling plus level-adapted questions), using the marketplace as the first test case.</footer>
+
+</div>
+
+</body>
+</html>
