@@ -33,28 +33,32 @@ const P = {
   mistralLarge: { provider: "mistral", match: /^mistral-large-latest$|^mistral-medium-latest$/ },
   codestral: { provider: "mistral", match: /^codestral-latest$/ },
   mistralSmall: { provider: "mistral", match: /^mistral-small-latest$/ },
+  // Cerebras serves the same open models as Groq (separate quota); SambaNova has DeepSeek
+  cerebras120: { provider: "cerebras", match: "gpt-oss-120b" },
+  cerebrasQwen: { provider: "cerebras", match: /^qwen-?3\.8-27b$/ },
+  sambaDeepseek: { provider: "sambanova", match: /^DeepSeek-V3\.2$|^DeepSeek-V3/ },
   // Paid: first for the master prompt, planner (API contract) and backend; a last-resort spare everywhere else (SPARES)
   claude: { provider: "anthropic", match: "claude-opus-5-5" },
 } satisfies Record<string, Pref>;
 
 export const SLOTS: SlotDef[] = [
-  { id: "intake", stage: "discovery", title: "Questioning agent", job: "Interviews the user, one question at a time", needs: { speed: 4, reasoning: 2 }, typicalPrompt: 2500, prefer: [P.groqQwen, P.groq20, P.geminiFlash, P.mistralSmall] },
-  { id: "draft", stage: "discovery", title: "Draft writer", job: "Turns the interview into the first plan", needs: { reasoning: 4 }, typicalPrompt: 1500, prefer: [P.groq120, P.deepseekPro, P.geminiFlash, P.mistralLarge] },
-  { id: "merge", stage: "discovery", title: "Answer merger", job: "Folds the user's answers into the plan", needs: { reasoning: 3 }, typicalPrompt: 4000, prefer: [P.groqQwen, P.geminiFlash, P.groq120, P.mistralLarge] },
-  { id: "seat-architect", stage: "council", title: "Architect seat", job: "Reviews data, API, scale", needs: { reasoning: 4 }, typicalPrompt: 3000, prefer: [P.deepseekPro, P.groq120, P.geminiFlash] },
-  { id: "seat-product", stage: "council", title: "Product seat", job: "Reviews users, features, journeys", needs: { reasoning: 3 }, typicalPrompt: 3000, prefer: [P.geminiFlash, P.groqQwen, P.mistralLarge] },
-  { id: "seat-security", stage: "council", title: "Security seat", job: "Reviews login, permissions, money", needs: { reasoning: 4 }, typicalPrompt: 3000, prefer: [P.groq120, P.mistralLarge, P.deepseekPro] },
+  { id: "intake", stage: "discovery", title: "Questioning agent", job: "Interviews the user, one question at a time", needs: { speed: 4, reasoning: 2 }, typicalPrompt: 2500, prefer: [P.groqQwen, P.cerebrasQwen, P.groq20, P.geminiFlash, P.mistralSmall] },
+  { id: "draft", stage: "discovery", title: "Draft writer", job: "Turns the interview into the first plan", needs: { reasoning: 4 }, typicalPrompt: 1500, prefer: [P.groq120, P.cerebras120, P.deepseekPro, P.sambaDeepseek, P.geminiFlash, P.mistralLarge] },
+  { id: "merge", stage: "discovery", title: "Answer merger", job: "Folds the user's answers into the plan", needs: { reasoning: 3 }, typicalPrompt: 4000, prefer: [P.groqQwen, P.cerebrasQwen, P.geminiFlash, P.groq120, P.cerebras120, P.mistralLarge] },
+  { id: "seat-architect", stage: "council", title: "Architect seat", job: "Reviews data, API, scale", needs: { reasoning: 4 }, typicalPrompt: 3000, prefer: [P.deepseekPro, P.sambaDeepseek, P.groq120, P.cerebras120, P.geminiFlash] },
+  { id: "seat-product", stage: "council", title: "Product seat", job: "Reviews users, features, journeys", needs: { reasoning: 3 }, typicalPrompt: 3000, prefer: [P.geminiFlash, P.groqQwen, P.cerebrasQwen, P.mistralLarge] },
+  { id: "seat-security", stage: "council", title: "Security seat", job: "Reviews login, permissions, money", needs: { reasoning: 4 }, typicalPrompt: 3000, prefer: [P.groq120, P.cerebras120, P.mistralLarge, P.deepseekPro, P.sambaDeepseek] },
   { id: "seat-skeptic", stage: "council", title: "Skeptic seat", job: "Hunts contradictions and edge cases", needs: { reasoning: 3 }, typicalPrompt: 3000, prefer: [P.kimi, P.groq20, P.mistralLarge] },
-  { id: "seat-designer", stage: "council", title: "Designer seat", job: "Reviews screens, flow, look", needs: { reasoning: 3 }, typicalPrompt: 3000, prefer: [P.groqQwen, P.geminiFlash, P.mistralSmall] },
-  { id: "head", stage: "council", title: "Head of discussion", job: "Reads the whole debate and writes the outcome", needs: { reasoning: 4, context: 32000 }, typicalPrompt: 6000, prefer: [P.geminiFlash, P.deepseekPro, P.groq120] },
-  { id: "translator", stage: "council", title: "Translator", job: "Rewords questions for the user's level", needs: { speed: 3 }, typicalPrompt: 1500, prefer: [P.groq20, P.groqQwen, P.geminiFlash] },
-  { id: "panel", stage: "council", title: "Backup review panel", job: "Reviews the plan if the debate can't run", needs: { reasoning: 3 }, typicalPrompt: 3000, prefer: [P.groq20, P.groqQwen, P.geminiFlash, P.mistralSmall] },
-  { id: "master", stage: "master", title: "Master prompt writer", job: "Writes the spec the build team follows", needs: { reasoning: 4, context: 16000 }, typicalPrompt: 3000, prefer: [P.claude, P.deepseekPro, P.geminiFlash, P.groq120] },
-  { id: "manager", stage: "build", title: "Head manager", job: "Splits the work into tasks", needs: { reasoning: 4 }, typicalPrompt: 3000, prefer: [P.claude, P.geminiFlash, P.groq120, P.groq20] },
-  { id: "backend", stage: "build", title: "Backend developer", job: "Writes the database and API", needs: { coding: 4 }, typicalPrompt: 4500, prefer: [P.claude, P.kimi, P.deepseekPro, P.codestral, P.qwenCoder, P.groqQwen] },
-  { id: "theme", stage: "build", title: "Designer", job: "Writes the app's theme: colors, fonts, light and dark", needs: { coding: 3 }, typicalPrompt: 2500, prefer: [P.claude, P.geminiFlash, P.codestral, P.groqQwen] },
-  { id: "frontend", stage: "build", title: "Frontend developer", job: "Writes the pages", needs: { coding: 3 }, typicalPrompt: 4000, prefer: [P.geminiFlash, P.deepseekFlash, P.codestral, P.groqQwen, P.groq20] },
-  { id: "qa", stage: "build", title: "QA tester", job: "Explains failed tests and what to fix", needs: { reasoning: 4 }, typicalPrompt: 3000, prefer: [P.groq120, P.geminiFlash, P.groq20] },
+  { id: "seat-designer", stage: "council", title: "Designer seat", job: "Reviews screens, flow, look", needs: { reasoning: 3 }, typicalPrompt: 3000, prefer: [P.groqQwen, P.cerebrasQwen, P.geminiFlash, P.mistralSmall] },
+  { id: "head", stage: "council", title: "Head of discussion", job: "Reads the whole debate and writes the outcome", needs: { reasoning: 4, context: 32000 }, typicalPrompt: 6000, prefer: [P.geminiFlash, P.deepseekPro, P.sambaDeepseek, P.groq120, P.cerebras120] },
+  { id: "translator", stage: "council", title: "Translator", job: "Rewords questions for the user's level", needs: { speed: 3 }, typicalPrompt: 1500, prefer: [P.groq20, P.groqQwen, P.cerebrasQwen, P.geminiFlash] },
+  { id: "panel", stage: "council", title: "Backup review panel", job: "Reviews the plan if the debate can't run", needs: { reasoning: 3 }, typicalPrompt: 3000, prefer: [P.groq20, P.groqQwen, P.cerebrasQwen, P.geminiFlash, P.mistralSmall] },
+  { id: "master", stage: "master", title: "Master prompt writer", job: "Writes the spec the build team follows", needs: { reasoning: 4, context: 16000 }, typicalPrompt: 3000, prefer: [P.claude, P.deepseekPro, P.sambaDeepseek, P.geminiFlash, P.groq120, P.cerebras120] },
+  { id: "manager", stage: "build", title: "Head manager", job: "Splits the work into tasks", needs: { reasoning: 4 }, typicalPrompt: 3000, prefer: [P.claude, P.geminiFlash, P.groq120, P.cerebras120, P.groq20] },
+  { id: "backend", stage: "build", title: "Backend developer", job: "Writes the database and API", needs: { coding: 4 }, typicalPrompt: 4500, prefer: [P.claude, P.kimi, P.deepseekPro, P.sambaDeepseek, P.codestral, P.qwenCoder, P.groqQwen, P.cerebrasQwen] },
+  { id: "theme", stage: "build", title: "Designer", job: "Writes the app's theme: colors, fonts, light and dark", needs: { coding: 3 }, typicalPrompt: 2500, prefer: [P.claude, P.geminiFlash, P.codestral, P.groqQwen, P.cerebrasQwen] },
+  { id: "frontend", stage: "build", title: "Frontend developer", job: "Writes the pages", needs: { coding: 3 }, typicalPrompt: 4000, prefer: [P.geminiFlash, P.deepseekFlash, P.sambaDeepseek, P.codestral, P.groqQwen, P.cerebrasQwen, P.groq20] },
+  { id: "qa", stage: "build", title: "QA tester", job: "Explains failed tests and what to fix", needs: { reasoning: 4 }, typicalPrompt: 3000, prefer: [P.groq120, P.cerebras120, P.geminiFlash, P.groq20] },
 ];
 
 export type SlotId = string;
@@ -62,7 +66,7 @@ export const isSlot = (id: string) => SLOTS.some((s) => s.id === id);
 const slotDef = (id: string) => SLOTS.find((s) => s.id === id);
 
 // Always-available spares when Groq is plugged in, so a slot never runs dry
-const SPARES = ["groq:qwen/qwen3.8-27b", "groq:openai/gpt-oss-20b", "groq:openai/gpt-oss-120b", "anthropic:claude-opus-5-5"];
+const SPARES = ["groq:qwen/qwen3.8-27b", "cerebras:qwen-3.8-27b", "groq:openai/gpt-oss-20b", "groq:openai/gpt-oss-120b", "cerebras:gpt-oss-120b", "sambanova:DeepSeek-V3.2", "anthropic:claude-opus-5-5"];
 
 // ---------- part ratings (Vision's own judgment, 1–5; not benchmarks) ----------
 
@@ -73,7 +77,7 @@ const RATINGS: [RegExp, Rating][] = [
   [/claude-haiku/i, { coding: 4, reasoning: 4, speed: 5, context: 1000000 }],
   [/gpt-oss-120b/, { coding: 3, reasoning: 4, speed: 5 }],
   [/gpt-oss-20b/, { coding: 2, reasoning: 3, speed: 5 }],
-  [/qwen3\.8-27b/, { coding: 3, reasoning: 3, speed: 4 }],
+  [/qwen-?3\.8-27b/, { coding: 3, reasoning: 3, speed: 4 }],
   [/deepseek.*v4.*pro/i, { coding: 5, reasoning: 5, speed: 2, context: 128000 }],
   [/deepseek.*v4.*flash/i, { coding: 4, reasoning: 4, speed: 4, context: 128000 }],
   [/deepseek/i, { coding: 4, reasoning: 4, speed: 3, context: 128000 }],

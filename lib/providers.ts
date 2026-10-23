@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { claudeModels } from "./claude";
 import { getKey, keyStatus } from "./vault";
 
-export const PROVIDER_IDS = ["groq", "gemini", "nvidia", "mistral", "anthropic"] as const;
+export const PROVIDER_IDS = ["groq", "cerebras", "sambanova", "gemini", "nvidia", "mistral", "anthropic"] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 
 export type Provider = {
@@ -66,6 +66,28 @@ export const PROVIDERS: Record<ProviderId, Provider> = {
     tokensPerMinute: 0,
     requestsPerMinute: Number(process.env.MISTRAL_REQUESTS_PER_MINUTE ?? 50),
     limitScope: "provider",
+  },
+  cerebras: {
+    id: "cerebras",
+    name: "Cerebras",
+    baseUrl: "https://api.cerebras.ai/v1",
+    envKey: "CEREBRAS_API_KEY",
+    keyUrl: "https://cloud.cerebras.ai",
+    goodAt: "The same models as Groq, very fast. Doubles the free capacity.",
+    tokensPerMinute: 0,
+    requestsPerMinute: Number(process.env.CEREBRAS_REQUESTS_PER_MINUTE ?? 30),
+    limitScope: "model",
+  },
+  sambanova: {
+    id: "sambanova",
+    name: "SambaNova",
+    baseUrl: "https://api.sambanova.ai/v1",
+    envKey: "SAMBANOVA_API_KEY",
+    keyUrl: "https://cloud.sambanova.ai/apis",
+    goodAt: "DeepSeek for free. A strong backup coder.",
+    tokensPerMinute: 0,
+    requestsPerMinute: Number(process.env.SAMBANOVA_REQUESTS_PER_MINUTE ?? 20),
+    limitScope: "model",
   },
   anthropic: {
     id: "anthropic",
