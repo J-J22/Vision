@@ -22,7 +22,8 @@ export const config = {
   agentModels: {
     planner: process.env.GROQ_MODEL_PLANNER ?? "openai/gpt-oss-20b",
     backend: process.env.GROQ_MODEL_BACKEND ?? "openai/gpt-oss-120b",
-    frontend: process.env.GROQ_MODEL_FRONTEND ?? "qwen/qwen3.8-27b",
+    // Comma-separated: frontend tasks take turns across these models, since pages are long and fill one model's per-minute limit
+    frontend: list(process.env.GROQ_MODEL_FRONTEND, ["qwen/qwen3.8-27b", "openai/gpt-oss-20b"]),
     qa: process.env.GROQ_MODEL_QA ?? "openai/gpt-oss-20b",
   },
   concurrency: Number(process.env.LLM_CONCURRENCY ?? 3),

@@ -113,8 +113,10 @@ async function chat(model: string, messages: Message[], temperature: number, max
         parseWait(res.headers.get("retry-after")) ??
         parseWait(res.headers.get("x-ratelimit-reset-tokens")) ??
         1000 * 2 ** attempt;
-      console.warn(`[llm] ${model} returned ${res.status}, retrying in ${Math.round(wait)}ms`);
-      await sleep(Math.min(wait + 250, 60_000));
+      // Groq sometimes says "retry in 1ms"; retrying that fast just gets blocked again
+      const delay = Math.min(Math.max(wait, 2000 * (attempt + 1)), 60_000);
+      console.warn(`[llm] ${model} returned ${res.status}, retrying in ${Math.round(delay)}ms`);
+      await sleep(delay);
       continue;
     }
     if (!res.ok) {
