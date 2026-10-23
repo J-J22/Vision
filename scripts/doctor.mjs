@@ -66,10 +66,12 @@ if (!quick && key) {
 
 if (!quick) {
   let py = "";
-  for (const cmd of ["python3", "python", "py"]) {
+  // On Windows "python3" usually opens a Microsoft Store prompt, so try the real launchers first
+  const candidates = process.platform === "win32" ? ["py", "python", "python3"] : ["python3", "python"];
+  for (const cmd of candidates) {
     try {
-      py = execFileSync(cmd, ["--version"], { encoding: "utf8" }).trim();
-      break;
+      py = execFileSync(cmd, ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+      if (py) break;
     } catch {}
   }
   const m = py.match(/(\d+)\.(\d+)/);

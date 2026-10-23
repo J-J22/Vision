@@ -12,6 +12,8 @@ Built for a 24-hour hackathon. The first app type is a marketplace.
 
 ## Run it
 
+Step-by-step guide (Windows too): [LAUNCH.md](LAUNCH.md)
+
 Needs Node 22.13+ and Python 3.9+.
 
 ```bash
