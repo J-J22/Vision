@@ -28,7 +28,9 @@ export default function Discovery({ params }: { params: Promise<{ id: string }> 
     lastStage.current = p.stage;
   }, [p, id, router]);
 
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [p?.chat.length, p?.busy]);
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [p?.chat.length, p?.busy]);
 
   if (!p) return <Shell project={null} page="discovery">{problem ? <div className="error-box">{problem}</div> : <p className="muted">Loading…</p>}</Shell>;
 

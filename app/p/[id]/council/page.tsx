@@ -47,7 +47,9 @@ export default function Council({ params }: { params: Promise<{ id: string }> })
   const logEnd = useRef<HTMLDivElement>(null);
   const r = p ? p.rounds[(picked ?? p.rounds.length) - 1] : undefined;
 
-  useEffect(() => logEnd.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), [r?.messages.length, r?.speaking]);
+  useEffect(() => {
+    logEnd.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [r?.messages.length, r?.speaking]);
 
   if (!p) return <Shell project={null} page="council">{problem ? <div className="error-box">{problem}</div> : <p className="muted">Loading…</p>}</Shell>;
   if (!r) {
