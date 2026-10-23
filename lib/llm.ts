@@ -56,11 +56,13 @@ const g = globalThis as unknown as {
   __visionOut?: Map<string, number>; // part → when it's usable again after a daily limit
   __visionBadKey?: Map<string, number>; // provider → until
   __visionMissing?: Set<string>; // parts whose model doesn't exist
+  __visionTimeouts?: Map<string, number>; // part → how many calls timed out
 };
 const usage: Map<string, Booking[]> = (g.__visionUsage ??= new Map());
 const outForTheDay: Map<string, number> = (g.__visionOut ??= new Map());
 const badKey: Map<string, number> = (g.__visionBadKey ??= new Map());
 const missing: Set<string> = (g.__visionMissing ??= new Set());
+const timeouts: Map<string, number> = (g.__visionTimeouts ??= new Map());
 
 // Groq limits each model separately; the other providers limit the whole account
 const scope = (p: Part) => (PROVIDERS[p.provider].limitScope === "model" ? partId(p) : p.provider);
@@ -192,11 +194,14 @@ async function chat(route: string, label: string, messages: Message[], wanted: n
     } catch (err) {
       booking.tokens = 0;
       if ((err as Error).name === "TimeoutError") {
-        // Too slow right now: bench it for 10 minutes so the next calls go straight to a spare
-        cooldown.set(id, Date.now() + 10 * 60_000);
+        // Too slow right now: out for 10 minutes; a second time it's out for 2 hours, since every retry costs a 45s+ wait
+        const n = (timeouts.get(id) ?? 0) + 1;
+        timeouts.set(id, n);
+        const benchMs = n >= 2 ? 2 * 3_600_000 : 10 * 60_000;
+        outForTheDay.set(id, Date.now() + benchMs);
         lastError = `${id} took too long to answer`;
         report({ slot: route, part: id, event: "error", detail: "timed out" });
-        console.warn(`[llm] ${label}: ${lastError}, benched for 10 min`);
+        console.warn(`[llm] ${label}: ${lastError}, benched for ${n >= 2 ? "2 hours" : "10 min"}`);
         failures++;
         continue;
       }
