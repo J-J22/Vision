@@ -55,13 +55,16 @@ function usedLastMinute(model: string) {
   return log.reduce((sum, e) => sum + e.tokens, 0);
 }
 
-// Waits until this request fits in the model's per-minute budget, then books it
+// Waits until this request fits in the model's per-minute budget, then books it.
+// Returns the booking so the caller can correct it to what Groq actually counted.
 async function reserve(model: string, tokens: number) {
   while (usedLastMinute(model) + tokens > config.tokensPerMinute) {
     const oldest = tokenLog.get(model)?.[0];
     await sleep(oldest ? Math.max(500, oldest.at + 60_000 - Date.now() + 250) : 1000);
   }
-  tokenLog.get(model)!.push({ at: Date.now(), tokens });
+  const booking = { at: Date.now(), tokens };
+  tokenLog.get(model)!.push(booking);
+  return booking;
 }
 
 // Groq sends waits like "7.66s", "1m2.5s" or "120ms"
@@ -81,7 +84,7 @@ async function chat(model: string, messages: Message[], temperature: number, max
   if (!config.groqKey) throw new Error("GROQ_API_KEY is not set. Copy .env.example to .env.local and add your key.");
 
   for (let attempt = 0; attempt < 8; attempt++) {
-    await reserve(model, estimateTokens(messages.map((m) => m.content).join("\n")) + maxTokens);
+    const booking = await reserve(model, estimateTokens(messages.map((m) => m.content).join("\n")) + maxTokens);
     let res: Response;
     try {
       res = await fetch(`${config.groqBaseUrl}/chat/completions`, {
@@ -118,6 +121,8 @@ async function chat(model: string, messages: Message[], temperature: number, max
       throw new Error(`Groq ${res.status} for model ${model}: ${body.slice(0, 500)}`);
     }
     const data = await res.json();
+    // The booking assumed the longest possible answer; replace it with the real count
+    if (data.usage?.total_tokens) booking.tokens = data.usage.total_tokens;
     return data.choices?.[0]?.message?.content ?? "";
   }
   throw new Error(`Couldn't get an answer from Groq (${model}) after several tries. Check the internet connection, or wait a minute if Groq is rate-limiting.`);
