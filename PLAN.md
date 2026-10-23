@@ -6,7 +6,8 @@
 
 By **01:00**, run this flow end to end once, even if it looks rough:
 
-> User chats → Discovery asks about them and the app → Blueprint fills in live → user clicks Approve →
+> User chats → Discovery asks about them and the app → AI parliament reviews and sends back simple questions until confident →
+> Blueprint fills in live → user clicks Approve →
 > AI project manager makes a task list → 3 agents write the code → tests run → the marketplace app opens in a preview.
 
 Everything after 01:00 is polish. Discovery is never cut.
@@ -46,6 +47,33 @@ It starts in about a second, open models write it reliably, and there is no `npm
 
 **Sandbox:** for the hackathon, each generated app runs as a local child process in its own folder and port.
 Use Docker only if there is spare time. Say "sandboxed" in the pitch only if Docker is actually in use.
+
+## AI parliament (inside Discovery)
+
+Several models review the user's plan, agree on what is still missing, and send the user simple questions.
+This repeats until confidence is high enough. Only then does the Blueprint go to the build agents.
+
+```
+User idea + profile answers → draft Blueprint
+  → Parliament round
+      4 members in parallel, each a different Groq model with its own role:
+        architect (data, API, scale) · product (users, features, MVP)
+        security & payments · skeptic (contradictions, edge cases)
+      each returns { concerns: [{ area, question, why, severity }], scores: { area: 1–5 } }
+  → Chair: merge duplicates, rank, keep the top 3–5 blocking questions, turn the rest into defaults
+  → Translator: rewrite those questions for the user's level, with options and a recommended answer
+  → User answers → Blueprint updated → next round
+Stop when confidence ≥ 80% and no blocking questions remain, or after 3 rounds (hard cap).
+```
+
+**Confidence** combines the coverage checklist (answered / defaulted / missing) with the members' lowest score per area.
+Don't rely on a model simply saying "I'm 90% confident": self-reported confidence is unreliable.
+
+**Output to the build agents:** the final Blueprint plus the parliament minutes (decisions, defaults, disagreements).
+
+**Cost per round:** 4 members + chair + translator = 6 calls. Run the members in parallel, but they count against Groq's rate limits, so use the smaller models for members.
+
+**Hackathon version:** one review round per cycle. The debate pass (members react to each other's concerns) comes after 01:00 and is the first thing cut.
 
 ## Shared contracts (agree on these in the first hour, then don't change them)
 
@@ -97,14 +125,14 @@ type BuildEvent =
 
 Each person owns one stage end to end: its AI prompts, its server code and its screen.
 
-| | Person 1: Discovery, then QA | Person 2: Build pipeline (Groq owner) | Person 3: Code writers and sandbox |
+| | Person 1: Discovery and parliament | Person 2: Build pipeline (Groq owner) | Person 3: Code writers and sandbox |
 |---|---|---|---|
 | 16:00–17:00 | Next.js scaffold, `lib/types.ts`, `lib/sample-blueprint.json`; push by 16:45 | `lib/llm.ts` Groq wrapper returning validated JSON; push by 17:00 | Marketplace starter template that runs |
-| 17:00–21:00 | Discovery prompt (profile questions first, then the checklist, level-adapted wording), `/api/discovery`, chat UI, live Blueprint panel | Planner agent (Blueprint → tasks), `runner.ts` with fake agents, `/api/build` + event stream | Backend and frontend agents; `sandbox.ts`: create workspace, write files, start and stop the app |
-| **21:00** | **Checkpoint 1:** Discovery produces a full Blueprint in ≤10 turns | **Checkpoint 1:** fake agents run in dependency order, events stream | **Checkpoint 1:** backend agent code runs in a workspace |
-| 21:30–01:00 | Approve button; ~10 edge-case tests; QA agent | Plug in the real agents; `/build` task board and agent feed | `runTests`; preview panel; clean up old processes |
+| 17:00–21:00 | Intake + profile questions, parliament members, chair, translator, confidence loop; chat UI with live Blueprint and confidence meter | Planner agent (Blueprint → tasks), `runner.ts` with fake agents, `/api/build` + event stream | Backend and frontend agents; `sandbox.ts`: create workspace, write files, start and stop the app |
+| **21:00** | **Checkpoint 1:** a vague idea goes through ≥1 parliament round and the loop stops on its own | **Checkpoint 1:** fake agents run in dependency order, events stream | **Checkpoint 1:** backend agent code runs in a workspace |
+| 21:30–01:00 | Parliament view (member cards); Approve sends Blueprint + minutes; save rounds for replay | Plug in the real agents; QA agent; `/build` task board and agent feed | ~10 edge-case tests; `runTests`; preview panel; clean up old processes |
 | **01:00** | **Checkpoint 2: the full flow works once, as a team** | | |
-| 01:00–04:00 | Double-buy demo moment; Discovery polish | Fix loop (failed test → fix task, 1 retry); reliability runs | Tune code-writing prompts; stretch: one-command deploy |
+| 01:00–04:00 | Debate pass (members react to each other); tune the threshold | Fix loop (failed test → fix task, 1 retry); reliability runs | Double-buy demo moment; tune code-writing prompts; stretch: deploy |
 | 04:00–05:30 | **Feature freeze.** Run the full demo 3 times. Fix crashes only. | | Record the best run as a backup video |
 | 05:30–07:00 | Drive the live demo | Explain the agent team | README, slides; sleep in turns |
 
@@ -119,10 +147,11 @@ Each person owns one stage end to end: its AI prompts, its server code and its s
 
 ## If behind at 01:00, cut in this order
 
-1. Fix loop → just run the tests and show the results
-2. Parallel agents → run tasks one by one (the task board still shows the dependencies)
-3. Live preview → show the generated files and passing tests
-4. Never cut Discovery or the Blueprint
+1. Parliament debate pass → keep the single review round
+2. Fix loop → just run the tests and show the results
+3. Parallel agents → run tasks one by one (the task board still shows the dependencies)
+4. Live preview → show the generated files and passing tests
+5. Never cut Discovery or the Blueprint
 
 ## Demo script (3 minutes)
 

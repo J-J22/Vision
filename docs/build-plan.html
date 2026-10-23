@@ -145,7 +145,7 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
   <p class="muted">16:00 → 07:00. Three developers, models on Groq. Each person owns one stage of the product end to end: its AI prompts, its server code and its screen. Full details and the shared data formats are in <code>PLAN.md</code> in the repo.</p>
   <div class="goal">
     <span class="eyebrow">The one goal: working end to end by 01:00</span>
-    <p class="flow"><span>Chat →</span> <span>Discovery asks about you →</span> <span>Blueprint fills in →</span> <span>Approve →</span> <span>task list →</span> <span>agents write code →</span> <span>tests run →</span> <span>marketplace opens</span></p>
+    <p class="flow"><span>Chat →</span> <span>Discovery asks about you →</span> <span>AI parliament reviews →</span> <span>Blueprint fills in →</span> <span>Approve →</span> <span>task list →</span> <span>agents write code →</span> <span>tests run →</span> <span>marketplace opens</span></p>
   </div>
 </header>
 
@@ -155,18 +155,18 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
   <div class="split">
     <div class="slice">
       <span class="who">Person 1</span>
-      <strong>Discovery, then QA</strong>
-      <dl><dt>AI</dt><dd>Discovery prompt, QA agent</dd><dt>Server</dt><dd>Discovery API, edge-case tests</dd><dt>UI</dt><dd>Chat, live Blueprint</dd></dl>
+      <strong>Discovery &amp; parliament</strong>
+      <dl><dt>AI</dt><dd>Discovery prompt, parliament members, chair, translator</dd><dt>Server</dt><dd>Discovery API, confidence score</dd><dt>UI</dt><dd>Chat, live Blueprint, parliament view</dd></dl>
     </div>
     <div class="slice b">
       <span class="who">Person 2 · Groq owner</span>
       <strong>Build pipeline</strong>
-      <dl><dt>AI</dt><dd>Groq wrapper, planner agent</dd><dt>Server</dt><dd>Runner, live event stream</dd><dt>UI</dt><dd>Task board, agent feed</dd></dl>
+      <dl><dt>AI</dt><dd>Groq wrapper, planner, QA agent</dd><dt>Server</dt><dd>Runner, live event stream</dd><dt>UI</dt><dd>Task board, agent feed</dd></dl>
     </div>
     <div class="slice c">
       <span class="who">Person 3</span>
       <strong>Code writers &amp; sandbox</strong>
-      <dl><dt>AI</dt><dd>Backend and frontend agents</dd><dt>Server</dt><dd>Template, sandbox runner</dd><dt>UI</dt><dd>Preview panel</dd></dl>
+      <dl><dt>AI</dt><dd>Backend and frontend agents</dd><dt>Server</dt><dd>Template, sandbox, edge-case tests</dd><dt>UI</dt><dd>Preview panel</dd></dl>
     </div>
   </div>
 </section>
@@ -185,7 +185,7 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
 
 <nav class="filter" aria-label="Show plan for">
   <button type="button" id="f-all" data-show="all" aria-pressed="true">Everyone</button>
-  <button type="button" id="f-p1" data-show="p1" aria-pressed="false">Person 1 · Discovery &amp; QA</button>
+  <button type="button" id="f-p1" data-show="p1" aria-pressed="false">Person 1 · Discovery &amp; parliament</button>
   <button type="button" id="f-p2" data-show="p2" aria-pressed="false">Person 2 · Build pipeline</button>
   <button type="button" id="f-p3" data-show="p3" aria-pressed="false">Person 3 · Code writers</button>
 </nav>
@@ -194,9 +194,9 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
 <section class="lane a" id="p1">
   <div class="lane-head">
     <span class="who">Person 1</span>
-    <h2>Discovery, then QA</h2>
-    <p>Owns the front door of the product, the part judges see first. After 21:00, owns the agent that tries to break the generated app.</p>
-    <div class="owns"><code>lib/types.ts</code><code>lib/agents/discovery.ts</code><code>app/api/discovery</code><code>app/discovery</code><code>lib/agents/qa.ts</code><code>tests/edge-cases</code></div>
+    <h2>Discovery &amp; parliament</h2>
+    <p>Owns the front door of the product: the interview, the AI parliament that reviews the plan, and the loop that keeps asking until confidence is high enough.</p>
+    <div class="owns"><code>lib/types.ts</code><code>lib/agents/discovery.ts</code><code>lib/parliament/</code><code>app/api/discovery</code><code>app/discovery</code></div>
     <span class="progress" data-progress></span>
   </div>
   <div>
@@ -210,34 +210,35 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
       </ul>
     </div></div>
     <div class="block" data-from="1020" data-to="1260"><div class="time">17:00–21:00</div><div class="body">
-      <h3>Discovery</h3>
+      <h3>Discovery and parliament loop</h3>
       <div class="kind"><span>AI</span><span>server</span><span>UI</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="p1-4"><span>Prompt opens with 3–4 questions about the user, then sets their level: beginner, some tech, developer</span></label></li>
-        <li><label><input type="checkbox" id="p1-5"><span>Then walks the coverage checklist: users, features, pages, data, API, login, payments, scale, hosting</span></label></li>
-        <li><label><input type="checkbox" id="p1-6"><span>Words each question for the user's level, offers choices and marks the recommended one</span></label></li>
-        <li><label><input type="checkbox" id="p1-7"><span><code>/api/discovery</code>: each turn returns <code>{ reply, blueprintPatch, coverage, done }</code></span></label></li>
-        <li><label><input type="checkbox" id="p1-8"><span>Chat screen with clickable answer options; Blueprint panel and checklist update live</span></label></li>
+        <li><label><input type="checkbox" id="p1-4"><span>Intake: 3–4 questions about the user set their level (beginner, some tech, developer); the idea becomes a draft Blueprint</span></label></li>
+        <li><label><input type="checkbox" id="p1-5"><span>Parliament: 4 members, each a different model with a different role (architect, product, security and payments, skeptic), review the draft in parallel and return concerns, questions and a 1–5 score per area</span></label></li>
+        <li><label><input type="checkbox" id="p1-6"><span>Chair: merges and ranks the concerns, keeps the top 3–5 blocking questions, turns the rest into written-down defaults</span></label></li>
+        <li><label><input type="checkbox" id="p1-7"><span>Translator: rewrites the chosen questions for the user's level, with options and a recommended answer</span></label></li>
+        <li><label><input type="checkbox" id="p1-8"><span>Confidence score from the checklist and the members' scores; loop until it reaches 80% with no blocking questions, or 3 rounds</span></label></li>
+        <li><label><input type="checkbox" id="p1-8b"><span>Chat screen with clickable answer options; Blueprint panel and confidence meter update live</span></label></li>
       </ul>
-      <div class="check"><b>21:00 checkpoint</b>Answering as a non-technical user gives a complete Blueprint in 10 turns or fewer.</div>
+      <div class="check"><b>21:00 checkpoint</b>A vague idea goes through at least one parliament round, comes back as simple questions, and the loop stops on its own.</div>
     </div></div>
     <div class="block" data-from="1260" data-to="1290"><div class="time">21:00–21:30</div><div class="body"><p class="together">Sync with the team, eat, merge.</p></div></div>
     <div class="block" data-from="1290" data-to="1500"><div class="time">21:30–01:00</div><div class="body">
-      <h3>Hand-off and QA</h3>
-      <div class="kind"><span>AI</span><span>server</span><span>UI</span></div>
+      <h3>Parliament view and hand-off</h3>
+      <div class="kind"><span>server</span><span>UI</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="p1-9"><span>Approve button sends the Blueprint to <code>/api/build</code> and opens <code>/build</code></span></label></li>
-        <li><label><input type="checkbox" id="p1-10"><span>~10 HTTP edge-case tests: double-buy of the last item, negative price, editing someone else's listing, empty fields, huge title, ordering while logged out, duplicate payment confirmation, emoji in search, refund twice, page out of range</span></label></li>
-        <li><label><input type="checkbox" id="p1-11"><span>QA agent: picks the tests that fit this Blueprint and explains each failure in plain words</span></label></li>
+        <li><label><input type="checkbox" id="p1-9"><span>Parliament view: one card per member showing their main concern, so users watch the AIs review their idea</span></label></li>
+        <li><label><input type="checkbox" id="p1-10"><span>Approve button sends the Blueprint plus the parliament minutes (decisions, defaults, disagreements) to <code>/api/build</code></span></label></li>
+        <li><label><input type="checkbox" id="p1-11"><span>Save each session's rounds so the demo can replay one if Groq is slow</span></label></li>
       </ul>
       <div class="check"><b>01:00 checkpoint · whole team</b>Approve a Blueprint and get a running marketplace, with no hand-fixing.</div>
     </div></div>
     <div class="block" data-from="1500" data-to="1680"><div class="time">01:00–04:00</div><div class="body">
-      <h3>Demo moment and polish</h3>
+      <h3>Debate pass and polish</h3>
       <div class="kind"><span>AI</span><span>UI</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="p1-12"><span>Make sure the double-buy test reliably catches a purchase that isn't wrapped in a database transaction</span></label></li>
-        <li><label><input type="checkbox" id="p1-13"><span>Discovery polish: level badge, coverage ticks, smooth streaming text (show off Groq's speed), error states</span></label></li>
+        <li><label><input type="checkbox" id="p1-12"><span>Debate pass: members see each other's concerns and agree, object or add one, before the chair decides</span></label></li>
+        <li><label><input type="checkbox" id="p1-13"><span>Tune the confidence threshold so a typical idea finishes in 2–3 rounds; polish streaming text and error states</span></label></li>
       </ul>
     </div></div>
     <div class="block" data-from="1680" data-to="1770"><div class="time">04:00–05:30</div><div class="body"><p class="together">Feature freeze. Write the exact demo answers you'll type. Run the demo 3 times with the team.</p></div></div>
@@ -280,7 +281,7 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
       <h3>Build screen and real agents</h3>
       <div class="kind"><span>server</span><span>UI</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="p2-8"><span>Swap the fake agents for Person 3's real ones and Person 1's QA agent</span></label></li>
+        <li><label><input type="checkbox" id="p2-8"><span>Swap the fake agents for Person 3's real ones; write the QA agent, which picks the edge-case tests that fit this Blueprint and explains failures in plain words</span></label></li>
         <li><label><input type="checkbox" id="p2-9"><span><code>/build</code> task board (waiting, running, done, failed) driven by the event stream</span></label></li>
         <li><label><input type="checkbox" id="p2-10"><span>Agent feed showing the notes agents leave each other ("backend: /api/listings is ready")</span></label></li>
       </ul>
@@ -334,7 +335,8 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
       <h3>Tests and preview</h3>
       <div class="kind"><span>server</span><span>UI</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="p3-8"><span><code>runTests</code>: runs Person 1's edge-case tests against the workspace and returns pass/fail per test</span></label></li>
+        <li><label><input type="checkbox" id="p3-8"><span>~10 HTTP edge-case tests: double-buy of the last item, negative price, editing someone else's listing, empty fields, huge title, ordering while logged out, duplicate payment confirmation, emoji in search, refund twice, page out of range</span></label></li>
+        <li><label><input type="checkbox" id="p3-8b"><span><code>runTests</code>: runs them against the workspace and returns pass/fail per test</span></label></li>
         <li><label><input type="checkbox" id="p3-9"><span>Preview panel on <code>/build</code>: link to the running app plus the list of generated files</span></label></li>
         <li><label><input type="checkbox" id="p3-10"><span>Stop old app processes so ports don't run out after many builds</span></label></li>
       </ul>
@@ -344,6 +346,7 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
       <h3>Code quality and stretch</h3>
       <div class="kind"><span>AI</span><span>server</span></div>
       <ul class="tasks">
+        <li><label><input type="checkbox" id="p3-11b"><span>Make sure the double-buy test reliably catches a purchase that isn't wrapped in a database transaction</span></label></li>
         <li><label><input type="checkbox" id="p3-11"><span>Tune the backend and frontend prompts on the code that broke most often</span></label></li>
         <li><label><input type="checkbox" id="p3-12"><span>Stretch: one-command deploy of a generated app (Render or Railway)</span></label></li>
       </ul>
@@ -372,7 +375,7 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
       <ul>
         <li><b>16:45</b> Person 1 pushes the Next.js scaffold, types and sample Blueprint</li>
         <li><b>17:00</b> Person 2 pushes the Groq wrapper</li>
-        <li><b>21:30</b> Person 3's agents and Person 1's tests plug into Person 2's runner</li>
+        <li><b>21:30</b> Person 3's agents and tests plug into Person 2's runner; Person 1's Approve button sends the final Blueprint</li>
         <li>Until a hand-off lands, use a fake version and keep going</li>
       </ul>
     </div>
@@ -395,6 +398,7 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
     <div class="panel">
       <h3>If behind at 01:00, cut in this order</h3>
       <ol>
+        <li>Parliament debate pass: keep the single review round</li>
         <li>Fix loop: just run tests and show results</li>
         <li>Parallel agents: run tasks one at a time</li>
         <li>Live preview: show files and passing tests</li>
@@ -406,7 +410,7 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
     <h3>Demo script (3 minutes)</h3>
     <ol>
       <li>"A marketplace for second-hand textbooks." Answer as non-technical</li>
-      <li>Show a simple question with a recommended option; the Blueprint fills in</li>
+      <li>The parliament reviews the idea; its questions come back in simple words and the confidence meter rises</li>
       <li>Approve; agents leave each other notes on the task board</li>
       <li>QA catches the double-buy bug, backend fixes it, the test turns green</li>
       <li>Open the marketplace and buy a book</li>
