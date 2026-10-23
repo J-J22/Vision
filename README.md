@@ -1,4 +1,4 @@
-# AI Build Team
+# Vision
 
 A platform where a team of AI agents takes an app idea from first conversation to a deployed website.
 
