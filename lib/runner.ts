@@ -138,17 +138,28 @@ async function run(build: Build) {
 
     for (let attempt = 0; attempt < config.fixRetries && results?.some((r) => !r.passed); attempt++) {
       const failures = results.filter((r) => !r.passed);
-      const report = await reviewFailures(failures, readWorkspace(build.id), build.api);
-      say(build, "qa", report.summary);
+      // Pages that crash in the browser go back to the frontend agent; everything else to QA's review and the backend
+      const pageFailures = failures.filter((f) => f.file?.startsWith("web/"));
+      const apiFailures = failures.filter((f) => !f.file?.startsWith("web/"));
+      const report = apiFailures.length ? await reviewFailures(apiFailures, readWorkspace(build.id), build.api) : { summary: "", fixes: [] };
+      say(build, "qa", [report.summary, pageFailures.length ? `${pageFailures.length} page${pageFailures.length === 1 ? "" : "s"} crash in the browser: ${pageFailures.map((f) => f.name.replace("Page works in the browser: ", "")).join(", ")}.` : ""].filter(Boolean).join(" "));
       emit(build, { type: "status", status: "fixing" });
+
+      for (const f of pageFailures) {
+        const owner = build.tasks.find((t) => t.files.includes(f.file!));
+        const fixTask: Task = { id: `FIX${attempt + 1}-${owner?.id ?? "page"}-${f.file!.split("/").pop()!.replace(".jsx", "")}`, agent: "frontend", title: `Fix ${f.file}`, dependsOn: [], files: [f.file!], status: "waiting" };
+        build.tasks.push(fixTask);
+        emit(build, { type: "task", task: { ...fixTask } });
+        await runTask(build, fixTask, `This page crashes in the browser (tested by loading it and then navigating away):\n${f.detail}\nFind the cause (a bad effect cleanup, reading a field of undefined data, a wrong import or prop) and fix it. Guard against missing data while it loads.`);
+      }
 
       // One fix task per backend file the QA agent pointed at; default to every route file the plan has
       const routeFiles = build.tasks.filter((t) => t.agent === "backend" && !t.id.startsWith("FIX")).flatMap((t) => t.files.filter((f) => f.startsWith("routes/")));
-      const files = report.fixes.length ? [...new Set(report.fixes.map((f) => f.file))] : routeFiles;
-      let failureText = failures.map((f) => `- ${f.name}: ${f.detail}`).join("\n");
+      const files = !apiFailures.length ? [] : report.fixes.length ? [...new Set(report.fixes.map((f) => f.file))] : routeFiles;
+      let failureText = apiFailures.map((f) => `- ${f.name}: ${f.detail}`).join("\n");
       // The common first-run failure: the app made its own extra fields required, so every test that creates something
       // is refused. Fixing one field per round never finishes, so name the whole rule.
-      if (failures.some((f) => /got 400[^\n]*required|got 400[^\n]*missing/i.test(f.detail ?? ""))) {
+      if (apiFailures.some((f) => /got 400[^\n]*required|got 400[^\n]*missing/i.test(f.detail ?? ""))) {
         failureText +=
           "\nRoot cause: the app rejects requests that send only the fields in the API contract. Make EVERY field the contract" +
           " doesn't list (or marks with ?) optional in one go: remove all 'X is required' checks for them, and when inserting use" +

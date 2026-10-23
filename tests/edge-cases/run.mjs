@@ -5,7 +5,9 @@
 // "{{var}}" in a path or body string is replaced by a saved value; "{{run}}" by a value unique to this run;
 // "{{long:N}}" by N characters.
 // Prints one JSON array: [{ name, area, passed, detail }]
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { JSDOM, VirtualConsole } from "jsdom";
 
 const [base = "http://localhost:4000", testsFile, publicDir] = process.argv.slice(2);
 const runId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -66,11 +68,87 @@ async function runSteps(steps) {
   }
 }
 
+// ---------- rendering pages in a simulated browser ----------
+// Catches pages that crash in the browser (white screens), which API tests can't see.
+
+const srcPages = publicDir ? join(publicDir, "..", "src", "pages") : "";
+const reactPages = srcPages && existsSync(srcPages)
+  ? readdirSync(srcPages)
+      .filter((f) => f.endsWith(".jsx"))
+      .map((file) => {
+        const code = readFileSync(join(srcPages, file), "utf8");
+        return { file, route: code.match(/export const route\s*=\s*["'`]([^"'`]+)/)?.[1], auth: /export const auth\s*=\s*true/.test(code) };
+      })
+      .filter((p) => p.route && p.route !== "*")
+  : [];
+
+async function renderPage(path, login) {
+  const html = await (await fetch(base + path)).text();
+  const bundle = html.match(/src="(\/assets\/[^"]+\.js)"/)?.[1];
+  if (!bundle) throw new Error("The page has no app script (the frontend didn't build)");
+  const js = await (await fetch(base + bundle)).text();
+  const errors = [];
+  const vc = new VirtualConsole();
+  vc.on("jsdomError", (e) => errors.push(e.detail?.message ?? e.message));
+  vc.on("error", (...args) => {
+    const text = args.map(String).join(" ");
+    if (!text.startsWith("Warning:")) errors.push(text.slice(0, 300));
+  });
+  const dom = new JSDOM(html.replace(/<script[^>]*src=[^>]*><\/script>/g, ""), {
+    url: base + path,
+    runScripts: "dangerously",
+    pretendToBeVisual: true,
+    virtualConsole: vc,
+    beforeParse(w) {
+      // Behave like a current browser: scrollTo and friends return Promises, layout APIs exist
+      w.scrollTo = () => Promise.resolve();
+      w.Element.prototype.scrollIntoView = () => Promise.resolve();
+      w.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} });
+      w.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+      w.IntersectionObserver = class { observe() {} unobserve() {} disconnect() {} };
+      w.fetch = (u, o) => fetch(new URL(String(u), base), o);
+      if (login) {
+        w.localStorage.setItem("token", login.token);
+        w.localStorage.setItem("user", JSON.stringify(login.user));
+      }
+    },
+  });
+  const script = dom.window.document.createElement("script");
+  script.textContent = js;
+  dom.window.document.body.append(script);
+  await new Promise((r) => setTimeout(r, 1500));
+  const root = dom.window.document.getElementById("root");
+  const text = (root?.textContent ?? "").replace(/\s+/g, " ").trim();
+  // Leave the page like a visitor would: route changes run every effect's cleanup, where crashes like
+  // "effect returned a Promise" only show up
+  dom.window.history.pushState({}, "", "/__vision-leave");
+  dom.window.dispatchEvent(new dom.window.PopStateEvent("popstate"));
+  await new Promise((r) => setTimeout(r, 400));
+  dom.window.close();
+  if (errors.length) throw new Error(`${path} crashed in the browser: ${errors.slice(0, 3).join(" | ")}`);
+  if (text.includes("Something went wrong on this page")) throw new Error(`${path} shows an error instead of the page: ${text.slice(0, 300)}`);
+  if (text.length < 20) throw new Error(`${path} renders a blank page`);
+}
+
 const generated = testsFile ? JSON.parse(readFileSync(testsFile, "utf8")) : [];
 const pages = publicDir ? readdirSync(publicDir).filter((f) => f.endsWith(".html")) : [];
 
 const tests = [
   ...generated.map((t) => ({ name: t.name, area: t.area ?? "api", run: () => runSteps(t.steps ?? []) })),
+  ...reactPages.map((p) => ({
+    name: `Page works in the browser: ${p.route}`,
+    area: "pages",
+    file: p.file,
+    run: async () => {
+      let login;
+      if (p.auth) {
+        const r = await call("POST", "/api/auth/register", { body: { email: `page-${runId}-${p.file}@test.dev`.toLowerCase(), password: "secret123", name: "Page Tester" } });
+        login = r.data;
+      }
+      // Pages with :params get an id that may not exist; they must still show something sensible
+      await renderPage(p.route.replace(/:[^/]+/g, "1"), login);
+    },
+  })),
   {
     name: "Every page loads",
     area: "pages",
@@ -107,7 +185,7 @@ for (const t of tests) {
     await t.run();
     results.push({ name: t.name, area: t.area, passed: true });
   } catch (err) {
-    results.push({ name: t.name, area: t.area, passed: false, detail: String(err.message ?? err) });
+    results.push({ name: t.name, area: t.area, passed: false, detail: String(err.message ?? err), ...(t.file ? { file: `web/src/pages/${t.file}` } : {}) });
   }
 }
 // Runs last so it covers every request above

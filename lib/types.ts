@@ -111,7 +111,7 @@ export type AgentOutput = {
   note: string; // message to the other agents, shown in the feed
 };
 
-export type TestResult = { name: string; passed: boolean; detail?: string };
+export type TestResult = { name: string; passed: boolean; detail?: string; file?: string }; // file: the page a browser test blames
 
 export type BuildEvent =
   | { type: "task"; task: Task }
