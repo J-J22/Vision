@@ -5,10 +5,11 @@ __pycache__/
 .env.*
 !.env.example
 .DS_Store
-dist/
-build/
+/dist/
+/build/
 workspaces/
 .next/
 next-env.d.ts
 *.tsbuildinfo
 .next-*/
+data/

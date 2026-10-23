@@ -30,9 +30,12 @@ export const config = {
   // Groq's free tier allows 8,000 tokens per minute per model; raise this on a paid tier
   tokensPerMinute: Number(process.env.GROQ_TOKENS_PER_MINUTE ?? 8000),
   fakeAgents: process.env.VISION_FAKE_AGENTS === "1",
+  // "low" | "medium" | "high": how long gpt-oss models reason before answering
+  reasoningEffort: process.env.GROQ_REASONING_EFFORT ?? "low",
   parliament: {
-    confidenceThreshold: 0.8,
-    maxRounds: 3,
+    confidenceThreshold: Number(process.env.VISION_CONFIDENCE_TARGET ?? 0.8),
+    // Each council round takes a few minutes on Groq's free tier; 2 keeps a demo under ~10 minutes
+    maxRounds: Number(process.env.VISION_MAX_ROUNDS ?? 2),
     maxQuestionsPerRound: 5,
   },
   fixRetries: 1,

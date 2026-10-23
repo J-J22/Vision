@@ -4,7 +4,7 @@ import { z } from "zod";
 export const LEVELS = ["beginner", "some-tech", "developer"] as const;
 export type Level = (typeof LEVELS)[number];
 
-export const AREAS = ["users", "features", "pages", "data", "api", "auth", "payments", "scale", "hosting"] as const;
+export const AREAS = ["users", "features", "pages", "data", "api", "auth", "payments", "scale", "hosting", "design"] as const;
 export type Area = (typeof AREAS)[number];
 
 // ---------- Blueprint ----------
@@ -26,6 +26,7 @@ export const BlueprintSchema = z.object({
   auth: z.object({ method: str }).default({}),
   payments: z.object({ mode: str }).default({}),
   nonFunctional: z.object({ users: str, region: str, hosting: str }).default({}),
+  design: z.object({ feel: str, colors: str, references: str, devices: str }).default({}),
   assumptions: strList,
 });
 export type Blueprint = z.infer<typeof BlueprintSchema>;
@@ -71,6 +72,8 @@ export type UserQuestion = {
   text: string; // already worded for the user's level
   why: string;
   options: { label: string; recommended?: boolean }[];
+  askedBy?: string; // council seat that raised it
+  blocking?: boolean;
 };
 
 export type ParliamentRound = {
@@ -115,3 +118,48 @@ export type BuildEvent =
   | { type: "test"; name: string; passed: boolean; detail?: string }
   | { type: "preview"; url: string }
   | { type: "status"; status: "planning" | "building" | "testing" | "fixing" | "done" | "failed"; detail?: string };
+
+// ---------- Project flow (chat → council → master prompt → build) ----------
+
+export type Stage = "discovery" | "council" | "master" | "build";
+
+export type ChatMessage = {
+  id: string;
+  from: "vision" | "user" | MemberRole | "designer";
+  text: string;
+  // For a question: the answer choices, which one is recommended, and why it matters
+  options?: { label: string; recommended?: boolean }[];
+  why?: string;
+  questionId?: string;
+  at: string;
+};
+
+export type CouncilSeat = "architect" | "product" | "security" | "skeptic" | "designer";
+
+export type CouncilMessage = {
+  n: number;
+  from: CouncilSeat | "moderator";
+  type: "claim" | "verify" | "challenge" | "concede" | "info";
+  msg: string;
+  analysis?: string; // the seat's longer reasoning for this turn
+  at: string;
+};
+
+export type CouncilRound = {
+  round: number;
+  status: "running" | "done" | "failed";
+  phase: "blind" | "debate" | "synthesis" | "closed";
+  speaking?: CouncilSeat;
+  sealed: CouncilSeat[]; // blind claims submitted but not yet revealed
+  messages: CouncilMessage[];
+  synthesis?: string;
+  consensus: string[]; // what the council agreed on
+  disagreements: string[];
+  questions: UserQuestion[]; // for the user, already worded for their level
+  defaults: string[];
+  agreement: number; // 0–1, from verify/concede vs challenge
+  confidence: number; // 0–1
+  areaConfidence?: Record<Area, number>;
+  engine: "crossexam" | "fallback";
+  error?: string;
+};

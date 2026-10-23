@@ -12,6 +12,7 @@ export type Build = {
   id: string;
   blueprint: Blueprint;
   minutes?: Minutes;
+  masterPrompt?: string; // the approved master prompt (shown on the build page; agents get their slice via the Blueprint)
   tasks: Task[];
   events: BuildEvent[];
   listeners: Set<(e: BuildEvent) => void>;
@@ -161,11 +162,12 @@ async function run(build: Build) {
   }
 }
 
-export function startBuild(blueprint: Blueprint, minutes?: Minutes): Build {
+export function startBuild(blueprint: Blueprint, minutes?: Minutes, masterPrompt?: string): Build {
   const build: Build = {
     id: randomUUID().slice(0, 8),
     blueprint,
     minutes,
+    masterPrompt,
     tasks: [],
     events: [],
     listeners: new Set(),

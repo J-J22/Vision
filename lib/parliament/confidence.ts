@@ -15,6 +15,7 @@ function filled(bp: Blueprint, area: Area): boolean {
     case "payments": return has(bp.payments.mode);
     case "scale": return has(bp.nonFunctional.users);
     case "hosting": return has(bp.nonFunctional.hosting) || has(bp.nonFunctional.region);
+    case "design": return has(bp.design.feel) || has(bp.design.colors);
   }
 }
 

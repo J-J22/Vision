@@ -80,7 +80,7 @@ function parseWait(value: string | null): number | null {
 
 // ---------- raw call ----------
 
-async function chat(model: string, messages: Message[], temperature: number, maxTokens: number): Promise<string> {
+async function chat(model: string, messages: Message[], temperature: number, maxTokens: number, json = true): Promise<string> {
   if (!config.groqKey) throw new Error("GROQ_API_KEY is not set. Copy .env.example to .env.local and add your key.");
 
   for (let attempt = 0; attempt < 8; attempt++) {
@@ -95,7 +95,10 @@ async function chat(model: string, messages: Message[], temperature: number, max
           messages,
           temperature,
           max_tokens: maxTokens,
-          response_format: { type: "json_object" },
+          ...(json ? { response_format: { type: "json_object" } } : {}),
+          // gpt-oss models reason before answering, and the reasoning counts against max_tokens and the
+          // per-minute limit; "low" keeps it short (these are structured, well-specified jobs)
+          ...(model.startsWith("openai/gpt-oss") ? { reasoning_effort: config.reasoningEffort } : {}),
         }),
         signal: AbortSignal.timeout(120_000),
       });
@@ -121,6 +124,14 @@ async function chat(model: string, messages: Message[], temperature: number, max
     }
     if (!res.ok) {
       const body = await res.text();
+      // In JSON mode Groq rejects replies that aren't perfectly valid JSON; retry in plain mode,
+      // since the callers can pull JSON out of a slightly messy reply themselves
+      if (res.status === 400 && json && body.includes("json_validate_failed")) {
+        console.warn(`[llm] ${model} produced invalid JSON in JSON mode, retrying without it`);
+        booking.tokens = 0;
+        json = false;
+        continue;
+      }
       throw new Error(`Groq ${res.status} for model ${model}: ${body.slice(0, 500)}`);
     }
     const data = await res.json();
@@ -182,6 +193,25 @@ export async function callLLM<T extends z.ZodTypeAny>(opts: CallOptions<T>): Pro
       }
     }
     throw new Error(`${label}: model output failed validation twice. Last error: ${lastError}`);
+  } finally {
+    release();
+  }
+}
+
+// Plain-text call with the same pacing, size limits and retries as callLLM, without schema validation.
+// Used by the debate relay, where crossexam does its own parsing.
+export async function callText(opts: { model: string; messages: Message[]; maxTokens?: number; temperature?: number; json?: boolean; label?: string }) {
+  const { model, messages, temperature = 0.4, json = false, label = "text" } = opts;
+  const promptTokens = estimateTokens(messages.map((m) => m.content).join("\n"));
+  const room = config.tokensPerMinute - promptTokens - 200;
+  if (room < 400) throw new Error(`${label}: prompt is about ${promptTokens} tokens, too big for the ${config.tokensPerMinute} tokens/minute limit`);
+  const maxTokens = Math.min(opts.maxTokens ?? 1500, room);
+  await acquire();
+  try {
+    const started = Date.now();
+    const text = await chat(model, messages, temperature, maxTokens, json);
+    console.log(`[llm] ${label} ok (${model}, ${Date.now() - started}ms)`);
+    return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
   } finally {
     release();
   }

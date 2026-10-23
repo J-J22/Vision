@@ -35,7 +35,7 @@ export function makeProfile(answers: Record<string, string>): Profile {
 const BLUEPRINT_SHAPE = `Blueprint JSON shape:
 {
   "user": { "role": "", "level": "beginner|some-tech|developer", "goal": "" },
-  "app": { "name": "", "type": "marketplace", "summary": "" },
+  "app": { "name": "", "type": "marketplace|booking|social|saas|content|other", "summary": "" },
   "roles": [{ "name": "buyer", "can": ["..."] }],
   "features": [{ "name": "", "mvp": true, "stories": ["As a buyer I can ..."] }],
   "pages": [{ "path": "/", "purpose": "" }],
@@ -44,6 +44,7 @@ const BLUEPRINT_SHAPE = `Blueprint JSON shape:
   "auth": { "method": "" },
   "payments": { "mode": "" },
   "nonFunctional": { "users": "", "region": "", "hosting": "" },
+  "design": { "feel": "", "colors": "", "references": "", "devices": "" },
   "assumptions": ["things you guessed, in plain words"]
 }`;
 
@@ -52,10 +53,11 @@ export async function draftBlueprint(idea: string, profile: Profile): Promise<Bl
     label: "discovery draft",
     model: config.models.big,
     schema: BlueprintSchema,
-    system: `You are a senior product engineer. Turn a user's app idea into a first draft Blueprint for a web marketplace.
+    system: `You are a senior product engineer. Turn a user's app idea into a first draft Blueprint for a web app.
 Fill in only what the idea states or clearly implies. Leave fields empty when you'd be guessing about something
 important (payments, who can sell, scale, login method): a review panel will ask the user about those.
 Put any smaller guesses you make in "assumptions".
+Always give the app a short, memorable name in "app.name" (2-3 words, no "App" suffix) if the user didn't name it.
 ${BLUEPRINT_SHAPE}`,
     messages: [{ role: "user", content: `User profile: ${JSON.stringify(profile)}\n\nTheir idea:\n${idea}` }],
   });
@@ -74,9 +76,10 @@ export async function applyAnswers(
 ): Promise<{ blueprint: Blueprint; decisions: string[] }> {
   return callLLM({
     label: "discovery merge",
-    model: config.models.big,
+    // The big model is busy with the council's conclusion and the master prompt; this one is idle by now
+    model: config.models.parliament[1],
     schema: MergeSchema,
-    system: `You maintain a Blueprint for a web marketplace. Update it with the user's answers and the review panel's defaults.
+    system: `You maintain a Blueprint for a web app. Update it with the user's answers and the review panel's defaults.
 Change only what the answers and defaults affect, and keep everything else. Add entities, endpoints and pages that new
 features need. "decisions": one short line per answer, e.g. "Payments: the platform holds money until the buyer confirms delivery".
 Return {"blueprint": {...}, "decisions": [...]}.
