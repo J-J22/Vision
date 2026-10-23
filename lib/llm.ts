@@ -180,6 +180,8 @@ async function chat(route: string, label: string, messages: Message[], wanted: n
           ...(json ? { response_format: { type: "json_object" } } : {}),
           // gpt-oss models reason before answering, and that counts against max_tokens; "low" keeps it short
           ...(part.provider === "groq" && part.model.startsWith("openai/gpt-oss") ? { reasoning_effort: config.reasoningEffort } : {}),
+          // Gemini's thinking also counts against max_tokens and cut answers off mid-JSON; "low" keeps it short
+          ...(part.provider === "gemini" ? { reasoning_effort: "low" } : {}),
         }),
         // NVIDIA's free models sometimes queue for minutes; a healthy reply comes well inside 45s
         signal: AbortSignal.timeout(part.provider === "nvidia" ? 45_000 : 150_000),

@@ -24,7 +24,8 @@ const P = {
   groq120: { provider: "groq", match: "openai/gpt-oss-120b" },
   groq20: { provider: "groq", match: "openai/gpt-oss-20b" },
   groqQwen: { provider: "groq", match: "qwen/qwen3.8-27b" },
-  geminiFlash: { provider: "gemini", match: /^gemini-flash-latest$|^gemini-[\d.]+-flash$|^gemini-[\d.]+-flash(?!-lite)/ },
+  // Pinned (2026-10-24): gemini-flash-latest / 3.8-flash hang for minutes on the free tier and 3.7 is overloaded; 3.6 answers in ~2s
+  geminiFlash: { provider: "gemini", match: /^gemini-3\.6-flash$|^gemini-3\.5-flash$/ },
   deepseekPro: { provider: "nvidia", match: /deepseek-ai\/deepseek-v4.*pro|deepseek-ai\/deepseek-v[34]/i },
   deepseekFlash: { provider: "nvidia", match: /deepseek-ai\/deepseek-v4.*flash|deepseek-ai\/deepseek-v[34]/i },
   kimi: { provider: "nvidia", match: /moonshotai\/kimi-k2/i },
