@@ -1,0 +1,9 @@
+/* Starter base styles. Agents don't edit this file: the theme lives in theme.css. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html { -webkit-text-size-adjust: 100%; }
+body { @apply bg-bg text-fg font-sans antialiased; }
+h1, h2, h3, h4 { @apply font-head tracking-tight; }
+:focus-visible { outline: 2px solid rgb(var(--brand)); outline-offset: 2px; }

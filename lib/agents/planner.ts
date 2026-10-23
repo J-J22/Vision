@@ -33,9 +33,10 @@ const SYSTEM = `You are the project manager of an AI developer team. Design the 
 whatever kind of app it is (portfolio, booking, community, tool, shop…), build what the user asked for, nothing generic.
 
 The starter already has: an Express + SQLite server, users and login (/api/auth/register, /api/auth/login, /api/auth/me),
-a login page at /login, shared JS helpers and base CSS. Agents add files:
+a React frontend shell (nav, footer, routing, a sign-in page at /login, a 404 page) and a component kit. Agents add files:
 - "backend" writes SQL in db/ (db/010_x.sql, db/020_y.sql…) and Express routes in routes/ (routes/010_x.js, routes/020_y.js…)
-- "frontend" writes pages in public/ (public/index.html, public/about.html…), public/site.js and public/theme.css
+- "frontend" writes React pages in web/src/pages/ (web/src/pages/Home.jsx, web/src/pages/ProjectDetail.jsx…), optional
+  shared components in web/src/components/, and (theme task only) web/src/theme.css + web/src/site.js
 
 1. "api": the API contract for this app's MVP features. One entry per endpoint:
    {"method": "POST", "path": "/api/projects", "auth": "login", "body": "{ title, description?, url? }",
@@ -47,14 +48,15 @@ a login page at /login, shared JS helpers and base CSS. Agents add files:
    such as GET /api/dashboard [login] -> { stats: {...}, recent: [...], series: [{ label, value }] } for their own data,
    and a dashboard page with stat cards, a chart and recent activity. If there's an admin role, an admin page too.
 2. "tasks": who builds what.
-   - T1 is always {"agent": "frontend", "title": "Theme and navigation", "files": ["public/theme.css", "public/site.js"]}.
+   - T1 is always {"agent": "frontend", "title": "Theme and navigation", "files": ["web/src/theme.css", "web/src/site.js"]}.
    - Then backend tasks (1-2 files each: SQL + route for one area), then frontend pages (1-2 pages each).
-   - The home page public/index.html belongs to exactly one frontend task.
+   - The home page web/src/pages/Home.jsx belongs to exactly one frontend task; give it a rich landing layout.
+   - One page per file; a frontend task writes 1-2 pages. Don't plan a login page (the starter has one).
    - dependsOn lists only ids of earlier tasks. Pages depend on the backend tasks whose API they call.
    - Every file belongs to exactly one task. At most 14 tasks. Skip features marked mvp: false.
 Return {"api": [...], "tasks": [{"id": "T1", "agent": "frontend", "title": "...", "dependsOn": [], "files": ["..."]}, ...]}`;
 
-const THEME_TASK: Omit<Task, "status"> = { id: "T1", agent: "frontend", title: "Theme and navigation", dependsOn: [], files: ["public/theme.css", "public/site.js"] };
+const THEME_TASK: Omit<Task, "status"> = { id: "T1", agent: "frontend", title: "Theme and navigation", dependsOn: [], files: ["web/src/theme.css", "web/src/site.js"] };
 
 function clean(raw: z.infer<typeof PlanSchema>["tasks"]): Omit<Task, "status">[] {
   const seenIds = new Set<string>();
@@ -74,13 +76,13 @@ function clean(raw: z.infer<typeof PlanSchema>["tasks"]): Omit<Task, "status">[]
     seenIds.add(t.id);
   }
   // The theme comes first whatever the model did: every page builds on it
-  if (!seenFiles.has("public/theme.css")) out.unshift(THEME_TASK);
-  if (!seenFiles.has("public/index.html")) out.push({ id: "THOME", agent: "frontend", title: "Home page", dependsOn: out.map((t) => t.id), files: ["public/index.html"] });
+  if (!seenFiles.has("web/src/theme.css")) out.unshift(THEME_TASK);
+  if (!seenFiles.has("web/src/pages/Home.jsx")) out.push({ id: "THOME", agent: "frontend", title: "Home page", dependsOn: out.map((t) => t.id), files: ["web/src/pages/Home.jsx"] });
   return out;
 }
 
 export async function planTasks(blueprint: Blueprint, minutes?: Minutes): Promise<{ tasks: Task[]; api: Endpoint[] }> {
-  let plan: { tasks: Omit<Task, "status">[]; api: Endpoint[] } = { tasks: [THEME_TASK, { id: "T2", agent: "frontend", title: "Home page", dependsOn: ["T1"], files: ["public/index.html"] }], api: [] };
+  let plan: { tasks: Omit<Task, "status">[]; api: Endpoint[] } = { tasks: [THEME_TASK, { id: "T2", agent: "frontend", title: "Home page", dependsOn: ["T1"], files: ["web/src/pages/Home.jsx"] }], api: [] };
   if (!config.fakeAgents) {
     const result = await callLLM({
       label: "planner",

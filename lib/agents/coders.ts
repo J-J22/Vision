@@ -22,6 +22,7 @@ export type AgentInput = {
   notes: { agent: string; text: string }[]; // what teammates said so far
   api: Endpoint[]; // the contract every agent builds to
   tests: EdgeTest[]; // QA's edge-case tests, written before the code
+  planned: string; // every planned task and its files, so pages link to pages that will exist
   fix?: string; // set for fix tasks: what went wrong and what to change
 };
 
@@ -71,16 +72,18 @@ never reject a request without it. The contract wins over anything else you read
 Write complete files, never placeholders or "...". Return {"files": [{"path": "...", "content": "..."}], "note": "..."}.`;
 
 const FRONTEND_SYSTEM = `${TEAM}
-You are the FRONTEND developer. You write pages in public/ as plain HTML with an inline <script>; no frameworks, no build step.
+You are the FRONTEND developer. You write React pages (JSX) in web/src/pages/, built with the component kit, Tailwind,
+lucide-react icons and recharts. Your files are compiled right away; a build error comes back to you to fix.
 Only call API endpoints in the API contract. The bar is a polished product site (Lovable, Linear, Stripe), not a template:
 - Follow the Blueprint's design (feel, colors, references). Real copy written for this app and its audience; no lorem ipsum.
 - The home page has several sections: a hero (big headline, one-line pitch, primary + secondary button, a photo or visual),
   a features or highlights grid with icons, content pulled from the API where it fits, a call-to-action band.
 - Other pages: a clear page header, then the content in cards or lists with photos, hover states, and friendly empty and
   error states. Generous spacing (py-16+ sections), max-w containers, consistent rhythm, responsive from 360px phones up.
-- Use Tailwind utilities for layout and sections, the theme's colors (bg-brand, text-muted, …) and the base classes for forms.
-For the theme task, write theme.css as a complete visual identity (palette, fonts, buttons, cards, nav, inputs, hover
-states, dark mode if asked) on top of the base classes. Follow these project rules exactly:
+- Dashboards: a row of Stat cards, a recharts chart in a Card, then recent activity; only the signed-in user's own data.
+- Use the kit components and Tailwind with the theme's colors (bg-brand, text-muted, bg-brand/10, …); icons from lucide-react.
+For the theme task, write theme.css (every color variable as an RGB triplet, fonts, radius, dark values if asked) and
+site.js (name, tagline, nav links to the planned pages, showLogin, themeToggle). Follow these project rules exactly:
 
 {{CONVENTIONS}}
 
@@ -143,15 +146,21 @@ export async function runCoder(input: AgentInput): Promise<AgentOutput> {
       }
     : {
         "API CONTRACT (the endpoints you may call)": contract,
+        "ALL PLANNED TASKS (pages other tasks will write)": input.planned,
         "API LIST (what the backend built)": apiSummary(workspace),
-        "EXISTING PAGES": Object.keys(workspace).filter((p) => p.endsWith(".html")).join(", "),
+        // Other pages and their routes, so links point at pages that exist
+        "PAGES (file -> route)": Object.entries(workspace)
+          .filter(([p]) => p.startsWith("web/src/pages/"))
+          .map(([p, code]) => `${p} -> ${code.match(/export const route\s*=\s*["'`]([^"'`]+)/)?.[1] ?? "?"}`)
+          .concat(["web/src/pages/Login.jsx -> /login"])
+          .join("\n"),
       };
   if (Object.keys(mine).length) extra["YOUR CURRENT FILES"] = filesBlock(mine);
 
   const result = await callLLM({
     label: `${input.task.agent} ${input.task.id}`,
     // The theme decides how every page looks, so it gets its own position (a stronger model by default)
-    slot: isBackend ? "backend" : input.task.files.includes("public/theme.css") ? "theme" : "frontend",
+    slot: isBackend ? "backend" : input.task.files.includes("web/src/theme.css") ? "theme" : "frontend",
     system,
     schema: OutputSchema,
     // Multi-section pages and a full theme run long

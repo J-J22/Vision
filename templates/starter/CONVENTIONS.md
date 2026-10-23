@@ -1,7 +1,9 @@
 # Rules for agents writing code in this app
 
-This is an Express + SQLite app. It already has: a server, a database, login (register, login, `me`), shared CSS and JS helpers.
-You add files. You never edit `server.js`, `lib/`, `db/001_core.sql`, `routes/000_health.js`, `routes/001_auth.js`, `public/app.js`, `public/style.css` or `public/login.html`.
+This is an Express + SQLite backend with a React frontend (Vite, Tailwind, React Router). It already has: a server, a
+database, login (register, login, `me`), a sign-in page, a 404 page, the app shell (nav, footer, routing) and a component kit.
+You add files. You never edit `server.js`, `lib/`, `db/001_core.sql`, `routes/000_*`, `routes/001_*`,
+`web/src/components/ui.jsx`, `web/src/pages/Login.jsx`, `web/src/pages/NotFound.jsx` or anything else in `web/` not listed below.
 
 ## Where files go
 
@@ -9,7 +11,9 @@ You add files. You never edit `server.js`, `lib/`, `db/001_core.sql`, `routes/00
 |---|---|---|
 | `db/` | SQL that creates tables, run in name order on every start | `010_projects.sql`, `020_messages.sql`, … Always `CREATE TABLE IF NOT EXISTS` |
 | `routes/` | API endpoints, loaded in name order | `010_projects.js`, `020_messages.js`, … |
-| `public/` | Pages (plain HTML + inline `<script>`), served at `/name` for `name.html`; plus `theme.css` | `index.html`, `project.html`, `contact.html`, … |
+| `web/src/pages/` | React pages, one per file; each declares its own route | `Home.jsx`, `Projects.jsx`, `ProjectDetail.jsx`, `Dashboard.jsx`, … |
+| `web/src/components/` | Shared React components for this app (optional) | `ProjectCard.jsx`, … |
+| `web/src/theme.css`, `web/src/site.js` | The look, and the app's name and nav (theme task only) | |
 
 ## Database (node:sqlite, synchronous)
 
@@ -50,37 +54,51 @@ wrote from it. Build exactly those endpoints: same methods, paths, field names a
 - Ownership: anything a user creates stores their `req.user.id`; only that user may change or delete it (403 for others).
 - Missing ids return 404; malformed ids return 400 or 404, never 500.
 
-## Pages
+## Pages (React)
 
-- Every page's `<head>` has `<meta name="description" content="…">` written for that page, `<link rel="icon" href="/favicon.svg">`,
-  one `<h1>` per page, semantic tags (header, main, section, footer) and alt text on every image. Then, in this order: `<script src="https://cdn.tailwindcss.com/3.4.16"></script><script src="/tw.js"></script>`
-  `<link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/theme.css">`. At the end of `<body>`:
-  `<script src="/site.js"></script><script src="/app.js"></script>`, then your script, which calls `renderNav(); renderFooter();`.
-- Tailwind utility classes are available (no reset). Theme colors: `bg-brand text-brand bg-accent bg-card text-muted border-line`,
-  fonts `font-head`, radius `rounded-theme`. Use Tailwind for layout and sections; keep the base classes for forms and buttons.
-- Charts (dashboards): add `<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>` to that
-  page's `<head>` and draw with `new Chart(canvas, …)` using the theme's colors (read them with getComputedStyle).
-  Dashboards: stat cards on top, a chart, then recent activity; all of it the signed-in user's own data.
-- Photos: `https://picsum.photos/seed/<word>/<w>/<h>` (e.g. `https://picsum.photos/seed/laptop/800/500`) always loads; pick a
-  seed word that fits. Icons: small inline SVGs (Lucide/Heroicons style, `stroke="currentColor"`), never emoji as icons.
-- Use the helpers: `api(path, { method, body })` (sends the login token, throws `Error(message)` on failure), `currentUser()`,
-  `formatPrice(cents)`, `escapeHtml(text)`. Always pass user content through `escapeHtml` before putting it in HTML.
-- Base classes in style.css: `container`, `grid`, `card`, `muted`, `badge`, `row`, `stack`, `hero`, `error`, `success`,
-  `button`, `secondary`, `empty`. Use them; put anything app-specific in `theme.css` (only the theme task writes it).
-- Show errors in an element with class `error`, and an `empty` message when a list has nothing yet; never a blank page.
-- `public/site.js` sets `window.APP_NAME`, `window.NAV_LINKS = [{ href, label }]`, `window.SHOW_LOGIN = false` when the
-  app has no accounts for visitors (portfolio, landing page), and `window.THEME_TOGGLE = true` to show a light/dark switch.
-- The nav is built for you: `<nav class="nav"><a class="brand">…</a><a>…</a>…</nav>` (no lists). Don't write your own nav.
+Each page is one file in `web/src/pages/`. The shell finds it automatically (no router file to edit):
 
-## Theme (`public/theme.css`)
+```jsx
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { Package, Plus } from "lucide-react";                    // icons: any lucide-react icon
+import { api, useApi, useUser, formatPrice, formatDate } from "../lib/api.js";
+import { Button, Card, Badge, Field, Input, Textarea, Select, Section, PageHeader, Stat, EmptyState, Spinner, ErrorNote, Photo, cn } from "../components/ui.jsx";
 
-Written once, by the theme task, from the Blueprint's design (feel, colors, references, devices). It changes the LOOK,
-never the layout:
-- Set the variables in `:root`: `--bg`, `--card`, `--fg`, `--muted`, `--line`, `--brand`, `--brand-fg`, `--accent`, `--radius`,
-  `--font`, `--font-head`, `--shadow`. Use the colors the user asked for (brand = primary, accent = secondary).
-- If the design mentions dark mode or light and dark, also write `:root[data-theme="dark"] { … }` with the dark values,
-  and set `window.THEME_TOGGLE = true` in site.js. Both modes need readable contrast.
-- Restyle the shared classes (`.nav`, `.nav a`, `.nav .brand`, `.hero`, `.card`, `.button`, `button`, `.badge`, `h1`-`h3`,
-  inputs) with colors, fonts, borders, radius, shadows and hover states. Never change `padding`, `margin`, `gap`, `display`,
-  `grid-template-columns` or `max-width` of `.container`, `.grid`, `.row`, `.stack`: the pages rely on that spacing.
-- Pick one or two fonts that fit the feel, from Google Fonts via `@import` on the first line. No other external files.
+export const route = "/projects/:id";   // required; the home page is "/"
+export const auth = true;               // optional: signed-out visitors go to /login first
+
+export default function ProjectDetail() {
+  const { id } = useParams();
+  const { data, loading, error, reload } = useApi(`/api/projects/${id}`);
+  if (loading) return <Spinner />;
+  if (error) return <Section><ErrorNote>{error}</ErrorNote></Section>;
+  const { project } = data;
+  return <Section>…</Section>;
+}
+```
+
+- Installed packages, and nothing else: `react`, `react-router-dom`, `lucide-react` (icons), `recharts` (charts), `clsx`.
+- Data: `useApi(path)` for reads (`{ data, loading, error, reload }`), `await api(path, { method, body })` for writes (throws
+  `Error(message)` on failure; show it with `<ErrorNote>`). `useUser()` is the signed-in user or null. Links use `<Link to>`.
+- Component kit (`../components/ui.jsx`), styled by the theme: `Button` (variant primary|secondary|ghost|accent|danger,
+  size sm|md|lg, `to` for links, `loading`), `Card` (`hover` lifts it), `Badge` (tone neutral|brand|accent|danger|ok),
+  `Field` (label, hint, error) around `Input`/`Textarea`/`Select`, `Section` (full-width band with a centered container),
+  `PageHeader` (eyebrow, title, description, actions), `Stat` (label, value, icon, change), `EmptyState` (icon, title,
+  description, action), `Spinner`, `ErrorNote`, `Photo` (seed, w, h, alt: placeholder photos that always load), `cn`.
+- Tailwind for everything else. Theme colors: `bg-brand text-brand-fg bg-accent bg-card bg-bg text-fg text-muted border-line
+  text-danger text-ok`, with opacity like `bg-brand/10`; fonts `font-head`; radius `rounded-theme`. Dark mode just works.
+- Charts (dashboards): `recharts` (`ResponsiveContainer`, `AreaChart`, `BarChart`, …) with `stroke="rgb(var(--brand))"`.
+- Every page handles loading, errors and empty lists (`EmptyState`), and works from 360px phones up.
+- The nav and footer come from `web/src/site.js`; don't build your own.
+
+## Theme (`web/src/theme.css`, `web/src/site.js`)
+
+Written once, by the theme task, from the Blueprint's design (feel, colors, references, devices).
+- `theme.css`: optional `@import` of Google Fonts on the first line, then `:root { … }` setting EVERY variable:
+  `--bg --card --fg --muted --line --brand --brand-fg --accent --danger --ok` as space-separated RGB triplets
+  (e.g. `--brand: 37 99 235;`, never `#hex` or `rgb()`), plus `--radius` (e.g. `14px`), `--font` and `--font-head`.
+  Use the colors the user asked for (brand = primary, accent = secondary). Add `[data-theme="dark"] { … }` with dark
+  values for the colors when the design mentions dark mode. You may add a few global touches (selection color,
+  smooth scrolling, a subtle background gradient on `body`), nothing that changes layout.
+- `site.js`: `export default { name, tagline, nav: [{ to, label }], showLogin, themeToggle }`. `nav` lists the main pages;
+  `showLogin: false` for sites without visitor accounts; `themeToggle: true` when there's a dark mode.

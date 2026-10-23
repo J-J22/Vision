@@ -5,7 +5,7 @@ import { config } from "./config";
 import { planTasks, type Endpoint } from "./agents/planner";
 import { runCoder } from "./agents/coders";
 import { reviewFailures, writeTests, type EdgeTest } from "./agents/qa";
-import { createWorkspace, readWorkspace, runTests, startApp, validateFiles, writeFiles } from "./sandbox";
+import { buildFrontend, createWorkspace, readWorkspace, runTests, startApp, validateFiles, writeFiles } from "./sandbox";
 import type { Blueprint, BuildEvent, Minutes, Task, TestResult } from "./types";
 
 export type Build = {
@@ -52,11 +52,11 @@ async function runTask(build: Build, task: Task, fix?: string) {
     let instructions = fix;
     // Two attempts: if the code doesn't pass the quick checks, the agent gets the errors and tries once more
     for (let attempt = 1; attempt <= 2; attempt++) {
-      const out = await runCoder({ buildId: build.id, task, blueprint: build.blueprint, minutes: build.minutes, notes: build.notes, api: build.api, tests: build.tests, fix: instructions });
+      const out = await runCoder({ buildId: build.id, task, blueprint: build.blueprint, minutes: build.minutes, notes: build.notes, api: build.api, tests: build.tests, planned: build.tasks.filter((t) => t.agent !== "qa").map((t) => `${t.id} ${t.agent}: ${t.title} (${t.files.join(", ")})`).join("\n"), fix: instructions });
       const { written, rejected } = writeFiles(build.id, out.files);
       if (rejected.length) say(build, "system", `Ignored files outside the rules: ${rejected.join("; ")}`);
       if (!written.length && !config.fakeAgents) throw new Error("The agent didn't write any of its files");
-      const problems = validateFiles(build.id, written);
+      const problems = await validateFiles(build.id, written);
       if (!problems.length) {
         if (out.note) say(build, task.agent, out.note);
         setTask(build, task, "done");
@@ -95,6 +95,11 @@ async function runCodingTasks(build: Build) {
 }
 
 async function testApp(build: Build): Promise<TestResult[] | null> {
+  const web = await buildFrontend(build.id);
+  if (!web.ok) {
+    say(build, "qa", `The frontend doesn't build. ${web.errors.slice(0, 600)}`);
+    emit(build, { type: "test", name: "The frontend builds", passed: false, detail: web.errors });
+  }
   try {
     const { url } = await startApp(build.id);
     build.previewUrl = url;

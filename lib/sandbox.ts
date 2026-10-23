@@ -11,16 +11,15 @@ const TEMPLATE = join(ROOT, "templates", "starter");
 const WORKSPACES = join(ROOT, "workspaces");
 const TESTS = join(ROOT, "tests", "edge-cases", "run.mjs");
 
-// Folders agents may write to, and files inside them they must not touch
-const WRITABLE = ["db/", "routes/", "public/"];
+// Folders (and single files) agents may write to, and starter files inside them they must not touch
+const WRITABLE = ["db/", "routes/", "web/src/pages/", "web/src/components/", "web/src/theme.css", "web/src/site.js"];
 const PROTECTED = new Set([
   "db/001_core.sql",
   "routes/000_health.js",
   "routes/001_auth.js",
-  "public/app.js",
-  "public/style.css",
-  "public/tw.js",
-  "public/login.html",
+  "web/src/components/ui.jsx",
+  "web/src/pages/Login.jsx",
+  "web/src/pages/NotFound.jsx",
 ]);
 
 type Running = { proc: ChildProcess; port: number; logs: string[] };
@@ -56,7 +55,7 @@ export function checkPath(path: string): { ok: true; path: string } | { ok: fals
   // Agents always use forward slashes; normalize the same way on every OS
   const clean = posix.normalize(path.replace(/\\/g, "/")).replace(/^\.?\/+/, "");
   if (clean.startsWith("..") || clean.includes("/../")) return { ok: false, error: `${path}: path leaves the app folder` };
-  if (!WRITABLE.some((w) => clean.startsWith(w))) return { ok: false, error: `${path}: agents may only write to ${WRITABLE.join(", ")}` };
+  if (!WRITABLE.some((w) => (w.endsWith("/") ? clean.startsWith(w) : clean === w))) return { ok: false, error: `${path}: agents may only write to ${WRITABLE.join(", ")}` };
   if (PROTECTED.has(clean)) return { ok: false, error: `${path}: this starter file must not be changed` };
   return { ok: true, path: clean };
 }
@@ -80,7 +79,9 @@ export function writeFiles(id: string, files: { path: string; content: string }[
 }
 
 // Checks files an agent just wrote, before the app ever starts. Returns problems in words an agent can act on.
-export function validateFiles(id: string, paths: string[]): string[] {
+const FRONTEND_PACKAGES = /^(react|react-dom|react-router-dom|lucide-react|recharts|clsx)(\/|$)/;
+
+export async function validateFiles(id: string, paths: string[]): Promise<string[]> {
   const dir = workspacePath(id);
   const problems: string[] = [];
   for (const path of paths.filter((p) => p.endsWith(".js") && p.startsWith("routes/"))) {
@@ -103,22 +104,62 @@ export function validateFiles(id: string, paths: string[]): string[] {
     const run = spawnSync(process.execPath, ["-e", script], { cwd: dir, encoding: "utf8" });
     if (run.status !== 0) problems.push(`SQL error: ${run.stderr.trim().split("\n").pop()?.slice(0, 400)}`);
   }
+  // React pages: only the installed packages, then a real build (catches JSX and import mistakes)
+  const web = paths.filter((p) => p.startsWith("web/"));
+  for (const path of web.filter((p) => p.endsWith(".jsx") || p.endsWith(".js"))) {
+    const code = readFileSync(join(dir, path), "utf8");
+    for (const m of code.matchAll(/(?:^|\n)\s*import\s[^;]*?from\s*["']([^"']+)["']/g)) {
+      if (!m[1].startsWith(".") && !FRONTEND_PACKAGES.test(m[1])) {
+        problems.push(`${path} imports "${m[1]}", which isn't installed. Use react, react-router-dom, lucide-react, recharts, clsx or ../components/ui.jsx.`);
+      }
+    }
+  }
+  if (web.length && !problems.length) {
+    const build = await buildFrontend(id);
+    if (!build.ok) problems.push(`The frontend doesn't build:\n${build.errors}`);
+  }
   return problems;
 }
 
 // All files agents can see, as { path: content }, skipping the starter internals
-export function readWorkspace(id: string, folders = WRITABLE): Record<string, string> {
+export function readWorkspace(id: string, entries = WRITABLE): Record<string, string> {
   const dir = workspacePath(id);
   const out: Record<string, string> = {};
-  for (const folder of folders) {
-    const full = join(dir, folder);
+  for (const entry of entries) {
+    const full = join(dir, entry);
     if (!existsSync(full)) continue;
+    if (!entry.endsWith("/")) {
+      out[entry] = readFileSync(full, "utf8");
+      continue;
+    }
     for (const name of readdirSync(full)) {
-      const rel = `${folder}${name}`;
-      out[rel] = readFileSync(join(full, name), "utf8");
+      if (PROTECTED.has(`${entry}${name}`)) continue;
+      out[`${entry}${name}`] = readFileSync(join(full, name), "utf8");
     }
   }
   return out;
+}
+
+// Builds the React frontend (web/ -> web/dist). One build at a time per app, since builds share the output folder.
+const buildQueue = new Map<string, Promise<unknown>>();
+export function buildFrontend(id: string): Promise<{ ok: boolean; errors: string }> {
+  const run = () =>
+    new Promise<{ ok: boolean; errors: string }>((res) => {
+      const proc = spawn(process.execPath, [join(TEMPLATE, "node_modules", "vite", "bin", "vite.js"), "build", "web"], { cwd: workspacePath(id), stdio: ["ignore", "pipe", "pipe"] });
+      let out = "";
+      const timer = setTimeout(() => proc.kill(), 120_000);
+      proc.stdout.on("data", (c) => (out += c));
+      proc.stderr.on("data", (c) => (out += c));
+      proc.on("exit", (code) => {
+        clearTimeout(timer);
+        // Keep the part that names the file and line, not Vite's banner
+        const errors = out.replace(/\x1b\[[0-9;]*m/g, "").split("\n").filter((l) => l.trim() && !/^vite v|transforming|rendering chunks|computing gzip|^dist\//.test(l)).join("\n");
+        res({ ok: code === 0, errors: errors.slice(-1500) });
+      });
+    });
+  const next = (buildQueue.get(id) ?? Promise.resolve()).then(run, run);
+  buildQueue.set(id, next);
+  return next;
 }
 
 // The rulebook, cut down to the sections an agent needs (smaller prompts fit Groq's limits)
@@ -200,7 +241,7 @@ export async function runTests(id: string, url: string, tests: unknown[]): Promi
   const file = join(workspacePath(id), ".vision-tests.json");
   writeFileSync(file, JSON.stringify(tests, null, 1));
   return new Promise((res, rej) => {
-    const proc = spawn(process.execPath, [TESTS, url, file, join(workspacePath(id), "public")], { stdio: ["ignore", "pipe", "pipe"] });
+    const proc = spawn(process.execPath, [TESTS, url, file, join(workspacePath(id), "web", "dist")], { stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     let err = "";
     const timer = setTimeout(() => proc.kill(), 60000);

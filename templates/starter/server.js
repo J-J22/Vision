@@ -1,6 +1,6 @@
 // Starter server. Agents don't edit this file: they add files to db/, routes/ and public/.
 import express from "express";
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { db, tx, runMigrations } from "./lib/db.js";
@@ -25,10 +25,14 @@ for (const file of readdirSync(join(root, "routes")).filter((f) => f.endsWith(".
   mod.default(app, ctx);
 }
 
-app.use(express.static(join(root, "public"), { extensions: ["html"] }));
+// The React frontend, built by Vite into web/dist (npm run build)
+const dist = join(root, "web", "dist");
+if (!existsSync(join(dist, "index.html"))) console.warn("No frontend build yet: run `npm run build`");
+app.use(express.static(dist, { index: false }));
 
 app.use("/api", (req, res) => res.status(404).json({ error: `No endpoint ${req.method} ${req.originalUrl}` }));
-app.use((req, res) => res.status(404).sendFile(join(root, "public", "404.html")));
+// Every other page is the React app; its router shows the page (or its 404 page)
+app.get("*", (req, res) => res.sendFile(join(dist, "index.html")));
 
 // Errors always come back as JSON, never as an HTML stack trace
 app.use((err, req, res, next) => {

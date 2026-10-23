@@ -66,6 +66,7 @@ Needs Node.js 22.13 or newer.
 
 \`\`\`
 npm install
+npm run build   # builds the React frontend into web/dist (already included; rerun after changes)
 npm start
 \`\`\`
 
@@ -73,7 +74,8 @@ Then open http://localhost:4000 (set \`PORT\` to use another port).
 
 ## What's inside
 
-- \`public/\`: the pages, \`theme.css\` (the look) and \`site.js\` (name and navigation)
+- \`web/src/pages/\`: the React pages (each declares its route), \`web/src/components/\`: the component kit and shared pieces
+- \`web/src/theme.css\` (the look) and \`web/src/site.js\` (name and navigation)
 - \`routes/\`: the API, one file per area
 - \`db/\`: the database tables (SQLite, created on first start in \`data.sqlite\`)
 - \`server.js\`, \`lib/\`: the server, database and login
