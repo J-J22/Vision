@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { config } from "./config";
 import { report } from "./activity";
+import { claudeChat } from "./claude";
 import { PROVIDERS, providerKey } from "./providers";
 import { chainFor, partId, type Part } from "./slots";
 
@@ -169,7 +170,9 @@ async function chat(route: string, label: string, messages: Message[], wanted: n
 
     let res: Response;
     try {
-      res = await fetch(`${provider.baseUrl}/chat/completions`, {
+      res = part.provider === "anthropic"
+        ? await claudeChat({ key: providerKey("anthropic"), model: part.model, route, messages, maxTokens, json })
+        : await fetch(`${provider.baseUrl}/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${providerKey(part.provider)}` },
         body: JSON.stringify({

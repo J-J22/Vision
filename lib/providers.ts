@@ -1,10 +1,12 @@
-// The AI providers Vision can plug in. All speak the OpenAI chat format, so one client serves them all.
+// The AI providers Vision can plug in. All but Claude speak the OpenAI chat format, so one client serves them;
+// Claude goes through Anthropic's SDK (lib/claude.ts).
 // Model lists come from each provider's own /models endpoint, so Vision only ever picks models that exist.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { claudeModels } from "./claude";
 import { getKey, keyStatus } from "./vault";
 
-export const PROVIDER_IDS = ["groq", "gemini", "nvidia", "mistral"] as const;
+export const PROVIDER_IDS = ["groq", "gemini", "nvidia", "mistral", "anthropic"] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 
 export type Provider = {
@@ -65,6 +67,17 @@ export const PROVIDERS: Record<ProviderId, Provider> = {
     requestsPerMinute: Number(process.env.MISTRAL_REQUESTS_PER_MINUTE ?? 50),
     limitScope: "provider",
   },
+  anthropic: {
+    id: "anthropic",
+    name: "Claude",
+    baseUrl: "https://api.anthropic.com",
+    envKey: "ANTHROPIC_API_KEY",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+    goodAt: "Paid. The most reliable: no free-tier queues or daily caps.",
+    tokensPerMinute: 0,
+    requestsPerMinute: Number(process.env.ANTHROPIC_REQUESTS_PER_MINUTE ?? 50),
+    limitScope: "provider",
+  },
 };
 
 export const isProvider = (id: string): id is ProviderId => (PROVIDER_IDS as readonly string[]).includes(id);
@@ -103,6 +116,15 @@ function saveCache() {
 
 // Asks the provider which models this key can use. Throws with a readable message when the key is wrong.
 export async function fetchModels(id: ProviderId, key: string): Promise<ModelInfo[]> {
+  if (id === "anthropic") {
+    try {
+      return (await claudeModels(key)).sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
+    } catch (err) {
+      const status = (err as { status?: number }).status;
+      if (status === 401 || status === 403) throw new Error(`Claude rejected this key (HTTP ${status}). Check that you copied all of it.`);
+      throw new Error(`Claude answered: ${err instanceof Error ? err.message : err}`);
+    }
+  }
   const res = await fetch(`${PROVIDERS[id].baseUrl}/models`, {
     headers: { Authorization: `Bearer ${key}` },
     signal: AbortSignal.timeout(15_000),
@@ -126,6 +148,8 @@ export async function fetchModels(id: ProviderId, key: string): Promise<ModelInf
 // and answers 200 to any key. Small models are tried first; retired ones (404/410, sent before the key is checked)
 // are skipped. Throws with a readable message unless the provider accepted the key.
 export async function checkKey(id: ProviderId, key: string, models: ModelInfo[]): Promise<void> {
+  // Claude's model list already requires a valid key, and a test reply would cost money
+  if (id === "anthropic") return;
   const name = PROVIDERS[id].name;
   const small = /(instant|flash|[-/]mini|small|tiny|\b[1-9]b\b|-[1-9]b)/i;
   const candidates = [...models.filter((m) => small.test(m.id)), ...models.filter((m) => !small.test(m.id))].slice(0, 4);

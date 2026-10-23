@@ -40,7 +40,7 @@ if (existsSync(".env.local")) {
 const key = process.env.GROQ_API_KEY || env.GROQ_API_KEY || "";
 const fake = (process.env.VISION_FAKE_AGENTS || env.VISION_FAKE_AGENTS) === "1";
 // Keys can also be plugged in on the AI parts page, where they're stored encrypted in data/keys.enc.json
-const otherEnvKey = ["GEMINI_API_KEY", "NVIDIA_API_KEY", "MISTRAL_API_KEY"].some((k) => process.env[k] || env[k]);
+const otherEnvKey = ["GEMINI_API_KEY", "NVIDIA_API_KEY", "MISTRAL_API_KEY", "ANTHROPIC_API_KEY"].some((k) => process.env[k] || env[k]);
 let dashboardKeys = [];
 try {
   dashboardKeys = Object.keys(JSON.parse(readFileSync("data/keys.enc.json", "utf8")));
