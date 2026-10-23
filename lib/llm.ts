@@ -100,7 +100,8 @@ async function chat(model: string, messages: Message[], temperature: number, max
         signal: AbortSignal.timeout(120_000),
       });
     } catch (err) {
-      // Dropped Wi-Fi, DNS hiccup or a stalled connection: wait and try again
+      // Dropped Wi-Fi, DNS hiccup or a stalled connection: nothing reached Groq, so free the booking, wait and retry
+      booking.tokens = 0;
       const wait = 1500 * 2 ** attempt;
       console.warn(`[llm] ${model} network error (${(err as Error & { cause?: { code?: string } }).cause?.code ?? (err as Error).name}), retrying in ${wait}ms`);
       await sleep(Math.min(wait, 30_000));
