@@ -17,7 +17,7 @@ export const MEMBERS: { role: MemberRole; title: string; focus: string }[] = [
   {
     role: "security",
     title: "Security & payments",
-    focus: "login, who may do what, how money moves (checkout, platform fee, seller payouts, refunds), fraud, fake listings, privacy and legal basics.",
+    focus: "login, who may do what, if the app handles money: how it moves (checkout, fees, payouts, refunds), fraud, fake content, privacy and legal basics.",
   },
   {
     role: "skeptic",

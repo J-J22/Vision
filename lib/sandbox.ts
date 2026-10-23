@@ -1,4 +1,4 @@
-// Each build gets its own copy of the marketplace template in workspaces/<id>/.
+// Each build gets its own copy of the starter app (server, database, login, base styles) in workspaces/<id>/.
 // The generated app runs as a separate Node process on its own port.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
@@ -7,7 +7,7 @@ import { dirname, join, posix, relative, resolve } from "node:path";
 import type { TestResult } from "./types";
 
 const ROOT = process.cwd();
-const TEMPLATE = join(ROOT, "templates", "marketplace");
+const TEMPLATE = join(ROOT, "templates", "starter");
 const WORKSPACES = join(ROOT, "workspaces");
 const TESTS = join(ROOT, "tests", "edge-cases", "run.mjs");
 
@@ -122,8 +122,8 @@ export function readWorkspace(id: string, folders = WRITABLE): Record<string, st
 
 // The rulebook, cut down to the sections an agent needs (smaller prompts fit Groq's limits)
 const SECTIONS: Record<string, string[]> = {
-  backend: ["Where files go", "Database", "Route file shape", "Errors", "Required core API"],
-  frontend: ["Where files go", "Required core API", "Pages"],
+  backend: ["Where files go", "Database", "Route file shape", "Errors", "The API contract"],
+  frontend: ["Where files go", "The API contract", "Pages", "Theme"],
 };
 
 export function conventions(agent?: "backend" | "frontend"): string {
@@ -194,9 +194,12 @@ export async function startApp(id: string): Promise<{ url: string }> {
   throw new Error(`The generated app didn't answer within 10 seconds:\n${logs.join("").slice(-3000)}`);
 }
 
-export async function runTests(url: string): Promise<TestResult[]> {
+// Runs the QA agent's tests (saved beside the app, out of the agents' reach) plus the built-in smoke tests
+export async function runTests(id: string, url: string, tests: unknown[]): Promise<TestResult[]> {
+  const file = join(workspacePath(id), ".vision-tests.json");
+  writeFileSync(file, JSON.stringify(tests, null, 1));
   return new Promise((res, rej) => {
-    const proc = spawn(process.execPath, [TESTS, url], { stdio: ["ignore", "pipe", "pipe"] });
+    const proc = spawn(process.execPath, [TESTS, url, file, join(workspacePath(id), "public")], { stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     let err = "";
     const timer = setTimeout(() => proc.kill(), 60000);

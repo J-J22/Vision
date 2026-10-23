@@ -6,6 +6,8 @@ import { callLLM } from "../llm";
 import { config } from "../config";
 import { conventions, readWorkspace } from "../sandbox";
 import type { AgentOutput, Blueprint, Minutes, Task } from "../types";
+import { contractText, type Endpoint } from "./planner";
+import { testsText, type EdgeTest } from "./qa";
 
 const OutputSchema = z.object({
   files: z.array(z.object({ path: z.string(), content: z.string() })),
@@ -18,6 +20,8 @@ export type AgentInput = {
   blueprint: Blueprint;
   minutes?: Minutes;
   notes: { agent: string; text: string }[]; // what teammates said so far
+  api: Endpoint[]; // the contract every agent builds to
+  tests: EdgeTest[]; // QA's edge-case tests, written before the code
   fix?: string; // set for fix tasks: what went wrong and what to change
 };
 
@@ -62,13 +66,16 @@ Follow these project rules exactly:
 
 {{CONVENTIONS}}
 
-If the plan or master prompt says a field is "required" but it isn't in the Required core API, store it with a default
-and don't reject requests without it: the core API rules win, because the automatic tests send only those fields.
+Fields the API contract lists without "?" are required; every other field is optional: store it with a default and
+never reject a request without it. The contract wins over anything else you read, because the tests follow it.
 Write complete files, never placeholders or "...". Return {"files": [{"path": "...", "content": "..."}], "note": "..."}.`;
 
 const FRONTEND_SYSTEM = `${TEAM}
 You are the FRONTEND developer. You write pages in public/ as plain HTML with an inline <script>; no frameworks, no build step.
-Only call API endpoints that exist in the API list you're given. Follow these project rules exactly:
+Only call API endpoints in the API contract. Make it look designed, not like a template: follow the Blueprint's design
+(feel, colors, references), real copy written for this app (no lorem ipsum), a clear hero on the home page, friendly empty
+states, and layouts that work on a 360px phone. For the theme task, write theme.css as a complete visual identity
+(palette, fonts, buttons, cards, nav, spacing) built on the base classes. Follow these project rules exactly:
 
 {{CONVENTIONS}}
 
@@ -79,7 +86,7 @@ function blueprintSlice(bp: Blueprint, agent: string) {
   const features = bp.features.filter((f) => f.mvp).map((f) => ({ name: f.name, stories: f.stories }));
   return agent === "backend"
     ? { app: bp.app.name, features, entities: bp.entities, endpoints: bp.endpoints, payments: bp.payments.mode }
-    : { app: bp.app, roles: bp.roles, features, pages: bp.pages };
+    : { app: bp.app, roles: bp.roles, features, pages: bp.pages, design: bp.design };
 }
 
 function taskMessage(input: AgentInput, extra: Record<string, string>) {
@@ -120,13 +127,17 @@ export async function runCoder(input: AgentInput): Promise<AgentOutput> {
 
   const system = (isBackend ? BACKEND_SYSTEM : FRONTEND_SYSTEM).replace("{{CONVENTIONS}}", () => conventions(isBackend ? "backend" : "frontend"));
 
+  const contract = contractText(input.api) || "(no API: this app is pages only)";
   const extra: Record<string, string> = isBackend
     ? {
+        "API CONTRACT (build exactly this)": contract,
+        "EDGE-CASE TESTS QA WILL RUN (make them pass)": testsText(input.tests) || "(only the smoke tests)",
         "EXISTING TABLES": filesBlock(Object.fromEntries(Object.entries(workspace).filter(([p]) => p.startsWith("db/")))),
         // Other route files as an endpoint list only: full code would blow the token budget
         "ENDPOINTS OTHER TASKS BUILT": apiSummary(Object.fromEntries(Object.entries(workspace).filter(([p]) => !input.task.files.includes(p)))),
       }
     : {
+        "API CONTRACT (the endpoints you may call)": contract,
         "API LIST (what the backend built)": apiSummary(workspace),
         "EXISTING PAGES": Object.keys(workspace).filter((p) => p.endsWith(".html")).join(", "),
       };
@@ -134,10 +145,12 @@ export async function runCoder(input: AgentInput): Promise<AgentOutput> {
 
   const result = await callLLM({
     label: `${input.task.agent} ${input.task.id}`,
-    slot: isBackend ? "backend" : "frontend",
+    // The theme decides how every page looks, so it gets its own position (a stronger model by default)
+    slot: isBackend ? "backend" : input.task.files.includes("public/theme.css") ? "theme" : "frontend",
     system,
     schema: OutputSchema,
-    maxTokens: 4096,
+    // Pages and a full theme run long; 4096 cut some off
+    maxTokens: 6000,
     temperature: 0.2,
     messages: [{ role: "user", content: taskMessage(input, extra) }],
   });

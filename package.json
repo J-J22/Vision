@@ -9,7 +9,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "setup": "npm install && npm install --prefix templates/marketplace",
+    "setup": "npm install && npm install --prefix templates/starter",
     "models": "node scripts/list-models.mjs",
     "typecheck": "tsc --noEmit",
     "test:reference": "node scripts/test-reference.mjs",

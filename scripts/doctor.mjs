@@ -27,7 +27,7 @@ if (nodeOk) {
 }
 
 report(existsSync("node_modules/next"), "Vision packages installed", "Run: npm run setup");
-report(existsSync("templates/marketplace/node_modules/express"), "Marketplace template packages installed", "Run: npm run setup");
+report(existsSync("templates/starter/node_modules/express"), "Starter app packages installed", "Run: npm run setup");
 
 // .env.local: same parsing rules as Next.js for the simple cases (quotes allowed)
 const env = {};

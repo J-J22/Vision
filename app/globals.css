@@ -351,6 +351,10 @@ details[open] summary { margin-bottom: 6px; }
 .ask-opt:hover { border-color: var(--violet); }
 .ask-opt.on { border-color: var(--neon); background: var(--raised); }
 .ask-rec { font-size: 12px; color: var(--neon); white-space: nowrap; }
+.ask-hint { margin: 0 0 2px; font-size: 13px; color: var(--muted); }
+.ask-opt.multi > span:first-child { display: flex; align-items: center; gap: 12px; }
+.ask-opt.multi > span:first-child::before { content: ""; flex: none; width: 18px; height: 18px; border: 1.5px solid var(--line); border-radius: 5px; background: var(--bg); }
+.ask-opt.multi.on > span:first-child::before { content: "✓"; display: grid; place-items: center; font-size: 12px; color: var(--neon-ink, #000); background: var(--neon); border-color: var(--neon); }
 .ask-free { display: flex; gap: 10px; }
 .ask-free input { flex: 1; min-width: 0; font: 15px var(--display); color: var(--text); background: var(--sink); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; outline: none; }
 .ask-free input:focus { border-color: var(--neon); }

@@ -2,9 +2,9 @@
 // Every step is published as a BuildEvent; /api/build/[id]/events streams them to the browser.
 import { randomUUID } from "node:crypto";
 import { config } from "./config";
-import { planTasks } from "./agents/planner";
+import { planTasks, type Endpoint } from "./agents/planner";
 import { runCoder } from "./agents/coders";
-import { reviewFailures } from "./agents/qa";
+import { reviewFailures, writeTests, type EdgeTest } from "./agents/qa";
 import { createWorkspace, readWorkspace, runTests, startApp, validateFiles, writeFiles } from "./sandbox";
 import type { Blueprint, BuildEvent, Minutes, Task, TestResult } from "./types";
 
@@ -14,6 +14,8 @@ export type Build = {
   minutes?: Minutes;
   masterPrompt?: string; // the approved master prompt (shown on the build page; agents get their slice via the Blueprint)
   tasks: Task[];
+  api: Endpoint[]; // the contract the planner designed; agents build to it, tests check it
+  tests: EdgeTest[]; // written by QA from the contract before any code
   events: BuildEvent[];
   listeners: Set<(e: BuildEvent) => void>;
   notes: { agent: string; text: string }[];
@@ -50,7 +52,7 @@ async function runTask(build: Build, task: Task, fix?: string) {
     let instructions = fix;
     // Two attempts: if the code doesn't pass the quick checks, the agent gets the errors and tries once more
     for (let attempt = 1; attempt <= 2; attempt++) {
-      const out = await runCoder({ buildId: build.id, task, blueprint: build.blueprint, minutes: build.minutes, notes: build.notes, fix: instructions });
+      const out = await runCoder({ buildId: build.id, task, blueprint: build.blueprint, minutes: build.minutes, notes: build.notes, api: build.api, tests: build.tests, fix: instructions });
       const { written, rejected } = writeFiles(build.id, out.files);
       if (rejected.length) say(build, "system", `Ignored files outside the rules: ${rejected.join("; ")}`);
       if (!written.length && !config.fakeAgents) throw new Error("The agent didn't write any of its files");
@@ -102,7 +104,7 @@ async function testApp(build: Build): Promise<TestResult[] | null> {
     say(build, "qa", `The app didn't start. ${message.slice(0, 600)}`);
     return [{ name: "The app starts", passed: false, detail: message.slice(0, 2000) }];
   }
-  const results = await runTests(build.previewUrl!);
+  const results = await runTests(build.id, build.previewUrl!, build.tests);
   for (const r of results) emit(build, { type: "test", name: r.name, passed: r.passed, detail: r.detail });
   return results;
 }
@@ -111,9 +113,15 @@ async function run(build: Build) {
   try {
     emit(build, { type: "status", status: "planning" });
     createWorkspace(build.id);
-    build.tasks = await planTasks(build.blueprint, build.minutes);
+    const plan = await planTasks(build.blueprint, build.minutes);
+    build.tasks = plan.tasks;
+    build.api = plan.api;
     for (const t of build.tasks) emit(build, { type: "task", task: { ...t } });
-    say(build, "planner", `Split the work into ${build.tasks.length - 1} tasks for the backend and frontend agents.`);
+    say(build, "planner", `Designed ${build.api.length} API endpoints and split the work into ${build.tasks.length - 1} tasks.`);
+
+    // Tests first: QA writes them from the contract, and the developers see them while they code
+    build.tests = await writeTests(build.blueprint, build.api);
+    say(build, "qa", build.tests.length ? `Wrote ${build.tests.length} edge-case tests before any code: ${build.tests.map((t) => t.name).join("; ")}.` : "No API to test beyond the basics; I'll run the smoke tests.");
 
     emit(build, { type: "status", status: "building" });
     await runCodingTasks(build);
@@ -125,22 +133,21 @@ async function run(build: Build) {
 
     for (let attempt = 0; attempt < config.fixRetries && results?.some((r) => !r.passed); attempt++) {
       const failures = results.filter((r) => !r.passed);
-      const report = await reviewFailures(failures, readWorkspace(build.id));
+      const report = await reviewFailures(failures, readWorkspace(build.id), build.api);
       say(build, "qa", report.summary);
       emit(build, { type: "status", status: "fixing" });
 
-      // One fix task per backend file the QA agent pointed at; default to the core API files
-      const files = report.fixes.length ? [...new Set(report.fixes.map((f) => f.file))] : ["routes/010_listings.js", "routes/020_orders.js"];
+      // One fix task per backend file the QA agent pointed at; default to every route file the plan has
+      const routeFiles = build.tasks.filter((t) => t.agent === "backend" && !t.id.startsWith("FIX")).flatMap((t) => t.files.filter((f) => f.startsWith("routes/")));
+      const files = report.fixes.length ? [...new Set(report.fixes.map((f) => f.file))] : routeFiles;
       let failureText = failures.map((f) => `- ${f.name}: ${f.detail}`).join("\n");
-      // The common first-run failure: the app made its own extra fields (ISBN, delivery method…) required, so every
-      // test that creates a listing or an order is refused. Fixing one field per round never finishes, so name the whole rule.
-      if (failures.some((f) => /returned 400|got 400[^\n]*required/i.test(f.detail ?? ""))) {
+      // The common first-run failure: the app made its own extra fields required, so every test that creates something
+      // is refused. Fixing one field per round never finishes, so name the whole rule.
+      if (failures.some((f) => /got 400[^\n]*required|got 400[^\n]*missing/i.test(f.detail ?? ""))) {
         failureText +=
-          "\nRoot cause: the app rejects requests that send only the core fields. The tests send ONLY these bodies:" +
-          " POST /api/listings { title, description, price_cents, quantity }; POST /api/orders { listing_id } (quantity optional);" +
-          " POST /api/payments/confirm { order_id, payment_id }. Make EVERY other field optional in one go: remove all 'X is required'" +
-          " checks for them, and when inserting use a default for any that are missing ('' for text, 0 for numbers, or a sensible" +
-          " choice such as the first delivery option), so NOT NULL columns still work. Keep the core validation rules.";
+          "\nRoot cause: the app rejects requests that send only the fields in the API contract. Make EVERY field the contract" +
+          " doesn't list (or marks with ?) optional in one go: remove all 'X is required' checks for them, and when inserting use" +
+          " a default for any that are missing ('' for text, 0 for numbers), so NOT NULL columns still work.";
       }
       for (const file of files) {
         const owner = build.tasks.find((t) => t.files.includes(file));
@@ -179,6 +186,8 @@ export function startBuild(blueprint: Blueprint, minutes?: Minutes, masterPrompt
     minutes,
     masterPrompt,
     tasks: [],
+    api: [],
+    tests: [],
     events: [],
     listeners: new Set(),
     notes: [],

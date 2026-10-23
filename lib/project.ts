@@ -154,6 +154,7 @@ function interviewTurn(p: Project) {
       text: turn.message,
       why: turn.why || undefined,
       options: turn.options.length ? turn.options.map((label, i) => ({ label, recommended: i === turn.recommended })) : undefined,
+      multi: turn.options.length > 1 && turn.multi ? true : undefined,
     });
     if (turn.done) {
       p.intakeDone = true;
@@ -223,6 +224,7 @@ function askCurrent(p: Project) {
     text: q.text,
     why: q.why,
     options: q.options,
+    multi: q.multi || undefined,
     questionId: q.id,
   });
 }

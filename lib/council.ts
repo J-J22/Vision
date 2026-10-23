@@ -128,7 +128,7 @@ async function conclude(synthesis: string, messages: CouncilMessage[], asked: { 
 - "questions": at most ${config.parliament.maxQuestionsPerRound} questions for the app's owner, most important first. Only things that change what gets built.
   Merge duplicates and drop anything already answered. "blocking": true only if building without the answer would likely be wrong.
   "area" is one of ${AREAS.join(", ")}. "askedBy" is the seat that raised it.
-- "defaults": every other open point, decided sensibly, as plain sentences ("Sellers can upload up to 5 photos").
+- "defaults": every other open point, decided sensibly, as plain sentences ("Each project can show up to 6 images").
 Return {"consensus": [], "disagreements": [], "questions": [{"area": "", "question": "", "why": "", "blocking": false, "askedBy": "architect"}], "defaults": []}`,
     messages: [
       {

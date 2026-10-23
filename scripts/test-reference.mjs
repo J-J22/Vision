@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 
-const template = resolve("templates/marketplace");
+const template = resolve("templates/starter");
 const dir = mkdtempSync(join(tmpdir(), "vision-ref-"));
 cpSync(template, dir, {
   recursive: true,

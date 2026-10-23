@@ -20,7 +20,7 @@ export async function chair(reviews: MemberReview[], asked: { question: string; 
     system: `You chair a review panel for a web app plan. Members raised the concerns below.
 1. Merge duplicates. Drop anything already answered.
 2. Keep at most ${maxQuestions} questions that most change what gets built; blocking ones first. Mark "blocking": true only if building without the answer would likely be wrong.
-3. Turn every other concern into a sensible default, written as a plain sentence ("Sellers can list up to 20 photos").
+3. Turn every other concern into a sensible default, written as a plain sentence ("Each project can show up to 6 images").
 4. "disagreements": where members disagreed, one line each (can be empty).
 Return {"questions": [{"area": "", "question": "", "why": "", "blocking": true}], "defaults": [], "disagreements": []}`,
     messages: [
@@ -41,6 +41,7 @@ const TranslatedSchema = z.object({
       text: z.string(),
       why: z.string().default(""),
       options: z.array(z.object({ label: z.string(), recommended: z.boolean().optional() })).min(2).max(5),
+      multi: z.boolean().default(false),
     }),
   ),
 });
@@ -65,8 +66,9 @@ export async function translate(
     temperature: 0.4,
     system: `Rewrite each question for this user. ${LEVEL_GUIDE[level]}
 For each question give 2-4 short answer options and mark exactly one as "recommended": true (the best choice for a first version).
+Set "multi": true when the user may pick several options at once (e.g. "Which sign-in methods?"), false when only one can apply.
 "why": one short sentence on why this matters to their app. Keep the same order and the same number of questions.
-Return {"questions": [{"text": "", "why": "", "options": [{"label": "", "recommended": true}, {"label": ""}]}]}`,
+Return {"questions": [{"text": "", "why": "", "options": [{"label": "", "recommended": true}, {"label": ""}], "multi": false}]}`,
     messages: [{ role: "user", content: JSON.stringify({ app: appSummary, questions: questions.map((q) => ({ question: q.question, why: q.why })) }) }],
   });
   return questions.map((q, i) => {
@@ -77,6 +79,7 @@ Return {"questions": [{"text": "", "why": "", "options": [{"label": "", "recomme
       text: t?.text ?? q.question,
       why: t?.why ?? q.why,
       options: t?.options ?? [{ label: "Yes", recommended: true }, { label: "No" }],
+      multi: t?.multi || undefined,
     };
   });
 }

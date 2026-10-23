@@ -32,4 +32,4 @@ app.use((err, req, res, next) => {
 });
 
 const port = Number(process.env.PORT ?? 4000);
-app.listen(port, () => console.log(`marketplace running on http://localhost:${port}`));
+app.listen(port, () => console.log(`app running on http://localhost:${port}`));

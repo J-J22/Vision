@@ -72,6 +72,7 @@ export type UserQuestion = {
   text: string; // already worded for the user's level
   why: string;
   options: { label: string; recommended?: boolean }[];
+  multi?: boolean; // several options can be picked at once
   askedBy?: string; // council seat that raised it
   blocking?: boolean;
 };
@@ -129,6 +130,7 @@ export type ChatMessage = {
   text: string;
   // For a question: the answer choices, which one is recommended, and why it matters
   options?: { label: string; recommended?: boolean }[];
+  multi?: boolean; // several options can be picked at once
   why?: string;
   questionId?: string;
   at: string;

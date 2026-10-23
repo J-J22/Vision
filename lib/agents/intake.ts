@@ -25,6 +25,7 @@ const TurnSchema = z.object({
   message: z.string(),
   options: z.array(Option).max(5).default([]),
   recommended: z.number().int().optional(),
+  multi: z.boolean().optional(),
   why: z.string().default(""),
   done: z.boolean().default(false),
   facts: FactsSchema.default({}),
@@ -45,14 +46,15 @@ Rules:
 - Cover, in this order: their app idea (an open question: no options), then 1-2 follow-ups about the idea (who it's for, the one thing it must do well),
   then design: the feel they want, brand colors or "no preference", and whether people will mostly use phones or computers.
 - For every question except the open idea question, give 2-5 short answer options in "options". Put the best choice for a first version
-  in "recommended" (its index), only when one choice is clearly better.
+  in "recommended" (its index), only when one choice is clearly better. Set "multi": true when several options can apply at once
+  (e.g. devices, audiences, must-have features, styles they like); false when they must pick one.
 - "why": one short sentence on why you're asking, in plain words.
 - knownFacts.level is their level ("beginner" doesn't code, "some-tech" a little, "developer"). Word everything for that level: no jargon for beginners.
 - Never ask something they already told you. If an answer covers several topics, skip ahead.
 - "facts": everything you know so far, including facts from earlier turns (repeat them every time).
 - Set "done": true once you know their role, coding level, the idea, who it's for, and the design feel, or after ${MAX_INTAKE_QUESTIONS} questions,
   or if they ask to move on. When done, "message" is one short line saying you're sending their plan to the review council, with no question.
-Return {"message": "...", "options": [], "recommended": 0, "why": "", "done": false, "facts": {...}}`;
+Return {"message": "...", "options": [], "recommended": 0, "multi": false, "why": "", "done": false, "facts": {...}}`;
 
 export type IntakeTurn = z.infer<typeof TurnSchema>;
 

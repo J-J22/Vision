@@ -14,6 +14,7 @@ export default function Discovery({ params }: { params: Promise<{ id: string }> 
   const router = useRouter();
   const { project: p, problem, act } = useProject(id);
   const [choice, setChoice] = useState("");
+  const [picked, setPicked] = useState<string[]>([]); // for questions that allow several answers
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const lastStage = useRef<string | null>(null);
@@ -30,7 +31,8 @@ export default function Discovery({ params }: { params: Promise<{ id: string }> 
   const last = p.chat.at(-1);
   const waiting = p.stage === "discovery" && !p.busy && last && last.from !== "user";
   const councilQuestion = p.queue.length > 0;
-  const answer = (text.trim() || choice).trim();
+  const multi = Boolean(last?.multi);
+  const answer = multi ? [...picked, text.trim()].filter(Boolean).join(", ") : (text.trim() || choice).trim();
   const answers = p.chat.filter((m) => m.from === "user");
   const facts = [
     ["Idea", p.facts.idea],
@@ -47,6 +49,7 @@ export default function Discovery({ params }: { params: Promise<{ id: string }> 
     setSending(false);
     if (ok) {
       setChoice("");
+      setPicked([]);
       setText("");
     }
   }
@@ -101,21 +104,28 @@ export default function Discovery({ params }: { params: Promise<{ id: string }> 
             )}
 
             {last.options && last.options.length > 0 && (
-              <div className="ask-opts" role="radiogroup" aria-label="Answer options">
-                {last.options.map((o) => (
+              <div className="ask-opts" role={multi ? "group" : "radiogroup"} aria-label="Answer options">
+                {multi && <p className="ask-hint">Pick all that apply</p>}
+                {last.options.map((o) => {
+                  const on = multi ? picked.includes(o.label) : choice === o.label;
+                  return (
                   <button
                     key={o.label}
                     type="button"
-                    role="radio"
-                    aria-checked={choice === o.label}
-                    className={`ask-opt ${choice === o.label ? "on" : ""}`}
-                    onClick={() => { setChoice(o.label); setText(""); }}
-                    onDoubleClick={() => send(o.label)}
+                    role={multi ? "checkbox" : "radio"}
+                    aria-checked={on}
+                    className={`ask-opt ${multi ? "multi" : ""} ${on ? "on" : ""}`}
+                    onClick={() => {
+                      if (multi) setPicked((cur) => (cur.includes(o.label) ? cur.filter((x) => x !== o.label) : [...cur, o.label]));
+                      else { setChoice(o.label); setText(""); }
+                    }}
+                    onDoubleClick={() => { if (!multi) send(o.label); }}
                   >
                     <span>{o.label}</span>
                     {o.recommended && <span className="ask-rec">Recommended</span>}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -123,8 +133,8 @@ export default function Discovery({ params }: { params: Promise<{ id: string }> 
               <input
                 id="answer"
                 value={text}
-                onChange={(e) => { setText(e.target.value); if (e.target.value) setChoice(""); }}
-                placeholder={last.options?.length ? "Or write your own" : "Your answer"}
+                onChange={(e) => { setText(e.target.value); if (e.target.value && !multi) setChoice(""); }}
+                placeholder={multi ? "Anything else? (optional)" : last.options?.length ? "Or write your own" : "Your answer"}
                 autoComplete="off"
                 autoFocus
               />

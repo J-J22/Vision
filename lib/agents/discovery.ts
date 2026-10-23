@@ -35,11 +35,11 @@ const BLUEPRINT_SHAPE = `Blueprint JSON shape:
 {
   "user": { "role": "", "level": "beginner|some-tech|developer", "goal": "" },
   "app": { "name": "", "type": "marketplace|booking|social|saas|content|other", "summary": "" },
-  "roles": [{ "name": "buyer", "can": ["..."] }],
-  "features": [{ "name": "", "mvp": true, "stories": ["As a buyer I can ..."] }],
+  "roles": [{ "name": "visitor", "can": ["..."] }],
+  "features": [{ "name": "", "mvp": true, "stories": ["As a visitor I can ..."] }],
   "pages": [{ "path": "/", "purpose": "" }],
-  "entities": [{ "name": "listing", "fields": [{ "name": "title", "type": "text" }] }],
-  "endpoints": [{ "method": "GET", "path": "/api/listings", "auth": "none|user|owner|admin", "purpose": "" }],
+  "entities": [{ "name": "project", "fields": [{ "name": "title", "type": "text" }] }],
+  "endpoints": [{ "method": "GET", "path": "/api/projects", "auth": "none|user|owner|admin", "purpose": "" }],
   "auth": { "method": "" },
   "payments": { "mode": "" },
   "nonFunctional": { "users": "", "region": "", "hosting": "" },
@@ -79,7 +79,7 @@ export async function applyAnswers(
     schema: MergeSchema,
     system: `You maintain a Blueprint for a web app. Update it with the user's answers and the review panel's defaults.
 Change only what the answers and defaults affect, and keep everything else. Add entities, endpoints and pages that new
-features need. "decisions": one short line per answer, e.g. "Payments: the platform holds money until the buyer confirms delivery".
+features need. "decisions": one short line per answer, e.g. "Contact form messages go to the owner's email".
 Return {"blueprint": {...}, "decisions": [...]}.
 ${BLUEPRINT_SHAPE}`,
     messages: [

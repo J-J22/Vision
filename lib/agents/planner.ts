@@ -1,24 +1,23 @@
-// The AI project manager: turns a Blueprint into a task list with owners and dependencies.
+// The AI project manager: designs the app from the Blueprint. Returns the task list (owners, files, dependencies)
+// and the API contract every agent builds to and the QA tester writes tests against. No app type is assumed.
 import { z } from "zod";
 import { callLLM } from "../llm";
 import { config } from "../config";
 import { checkPath } from "../sandbox";
 import type { Blueprint, Minutes, Task } from "../types";
 
-// The core marketplace every build needs. The planner adapts it and adds tasks for extra features.
-export const DEFAULT_PLAN: Omit<Task, "status">[] = [
-  { id: "T1", agent: "backend", title: "Create the listings and orders tables", dependsOn: [], files: ["db/010_market.sql"] },
-  { id: "T2", agent: "backend", title: "Listings API: browse, search, create, edit, delete", dependsOn: ["T1"], files: ["routes/010_listings.js"] },
-  { id: "T3", agent: "backend", title: "Orders, payments and refunds API", dependsOn: ["T1"], files: ["routes/020_orders.js"] },
-  { id: "T4", agent: "frontend", title: "Site name, navigation and home page with search", dependsOn: ["T2"], files: ["public/site.js", "public/index.html"] },
-  { id: "T5", agent: "frontend", title: "Listing page with a Buy button", dependsOn: ["T2", "T3"], files: ["public/listing.html"] },
-  { id: "T6", agent: "frontend", title: "Sell page for creating a listing", dependsOn: ["T2"], files: ["public/sell.html"] },
-  { id: "T7", agent: "frontend", title: "My orders page with pay and refund", dependsOn: ["T3"], files: ["public/orders.html"] },
-];
-
-const REQUIRED_FILES = ["db/010_market.sql", "routes/010_listings.js", "routes/020_orders.js"];
+const Endpoint = z.object({
+  method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
+  path: z.string(),
+  auth: z.enum(["public", "login", "owner"]).default("public"),
+  body: z.string().default(""), // e.g. "{ title, description?, url? }": ? marks optional fields
+  returns: z.string().default(""), // e.g. "201 { project }"
+  rules: z.string().default(""), // validation and edge cases, e.g. "400 if title is blank or over 200 chars"
+});
+export type Endpoint = z.infer<typeof Endpoint>;
 
 const PlanSchema = z.object({
+  api: z.array(Endpoint).max(24),
   tasks: z.array(
     z.object({
       id: z.string(),
@@ -30,23 +29,31 @@ const PlanSchema = z.object({
   ),
 });
 
-const SYSTEM = `You are the project manager of an AI developer team building a marketplace web app.
-Turn the Blueprint into a task list. Each task is done by one agent:
-- "backend" writes SQL files in db/ and Express route files in routes/
-- "frontend" writes HTML pages in public/ (and public/site.js)
+const SYSTEM = `You are the project manager of an AI developer team. Design the web app described by the Blueprint:
+whatever kind of app it is (portfolio, booking, community, tool, shop…), build what the user asked for, nothing generic.
 
-Start from the BASE PLAN. Keep all of its tasks and files (the core API is required and tested).
-You may reword titles to fit this app. Then add tasks for the Blueprint's other MVP features
-(e.g. reviews, messages, categories, favourites), usually one backend task and one frontend task per feature.
-New SQL files are numbered from db/030_..., new routes from routes/030_..., e.g. db/030_reviews.sql + routes/030_reviews.js.
+The starter already has: an Express + SQLite server, users and login (/api/auth/register, /api/auth/login, /api/auth/me),
+a login page at /login, shared JS helpers and base CSS. Agents add files:
+- "backend" writes SQL in db/ (db/010_x.sql, db/020_y.sql…) and Express routes in routes/ (routes/010_x.js, routes/020_y.js…)
+- "frontend" writes pages in public/ (public/index.html, public/about.html…), public/site.js and public/theme.css
 
-Rules:
-- Each task writes 1-2 files. Every file belongs to exactly one task.
-- dependsOn lists only ids of earlier tasks. Frontend tasks depend on the backend tasks whose API they call.
-- At most 12 tasks. Skip features marked mvp: false.
-Return {"tasks": [{"id": "T1", "agent": "backend", "title": "...", "dependsOn": [], "files": ["db/010_market.sql"]}, ...]}`;
+1. "api": the API contract for this app's MVP features. One entry per endpoint:
+   {"method": "POST", "path": "/api/projects", "auth": "login", "body": "{ title, description?, url? }",
+    "returns": "201 { project }", "rules": "400 if title is blank or longer than 200 characters"}
+   auth: "public" (anyone), "login" (any logged-in user), "owner" (only the user who created it; 403 for others).
+   Use :id in paths. Lists return { items }. Keep it to what the MVP needs (usually 4-14 endpoints).
+   A purely informational site may need only a few endpoints (e.g. a contact form, admin-editable content).
+2. "tasks": who builds what.
+   - T1 is always {"agent": "frontend", "title": "Theme and navigation", "files": ["public/theme.css", "public/site.js"]}.
+   - Then backend tasks (1-2 files each: SQL + route for one area), then frontend pages (1-2 pages each).
+   - The home page public/index.html belongs to exactly one frontend task.
+   - dependsOn lists only ids of earlier tasks. Pages depend on the backend tasks whose API they call.
+   - Every file belongs to exactly one task. At most 12 tasks. Skip features marked mvp: false.
+Return {"api": [...], "tasks": [{"id": "T1", "agent": "frontend", "title": "...", "dependsOn": [], "files": ["..."]}, ...]}`;
 
-function clean(raw: z.infer<typeof PlanSchema>["tasks"]): Omit<Task, "status">[] | null {
+const THEME_TASK: Omit<Task, "status"> = { id: "T1", agent: "frontend", title: "Theme and navigation", dependsOn: [], files: ["public/theme.css", "public/site.js"] };
+
+function clean(raw: z.infer<typeof PlanSchema>["tasks"]): Omit<Task, "status">[] {
   const seenIds = new Set<string>();
   const seenFiles = new Set<string>();
   const out: Omit<Task, "status">[] = [];
@@ -63,37 +70,45 @@ function clean(raw: z.infer<typeof PlanSchema>["tasks"]): Omit<Task, "status">[]
     out.push({ ...t, files, dependsOn: t.dependsOn.filter((d) => seenIds.has(d)) });
     seenIds.add(t.id);
   }
-  return REQUIRED_FILES.every((f) => seenFiles.has(f)) ? out : null;
+  // The theme comes first whatever the model did: every page builds on it
+  if (!seenFiles.has("public/theme.css")) out.unshift(THEME_TASK);
+  if (!seenFiles.has("public/index.html")) out.push({ id: "THOME", agent: "frontend", title: "Home page", dependsOn: out.map((t) => t.id), files: ["public/index.html"] });
+  return out;
 }
 
-export async function planTasks(blueprint: Blueprint, minutes?: Minutes): Promise<Task[]> {
-  let plan: Omit<Task, "status">[] | null = null;
+export async function planTasks(blueprint: Blueprint, minutes?: Minutes): Promise<{ tasks: Task[]; api: Endpoint[] }> {
+  let plan: { tasks: Omit<Task, "status">[]; api: Endpoint[] } = { tasks: [THEME_TASK, { id: "T2", agent: "frontend", title: "Home page", dependsOn: ["T1"], files: ["public/index.html"] }], api: [] };
   if (!config.fakeAgents) {
-    try {
-      const result = await callLLM({
-        label: "planner",
-        slot: "manager",
-        system: SYSTEM,
-        schema: PlanSchema,
-        messages: [
-          {
-            role: "user",
-            content: JSON.stringify({
-              blueprint: { app: blueprint.app.name, features: blueprint.features.map((f) => ({ name: f.name, mvp: f.mvp })), pages: blueprint.pages.map((p) => p.path), entities: blueprint.entities.map((e) => e.name) },
-              decisions: minutes?.decisions ?? [],
-              basePlan: DEFAULT_PLAN,
-            }),
-          },
-        ],
-      });
-      plan = clean(result.tasks);
-      if (!plan) console.warn("[planner] plan dropped required core files, using the base plan");
-    } catch (err) {
-      console.warn(`[planner] failed, using the base plan: ${err}`);
-    }
+    const result = await callLLM({
+      label: "planner",
+      slot: "manager",
+      system: SYSTEM,
+      schema: PlanSchema,
+      maxTokens: 4096,
+      messages: [
+        {
+          role: "user",
+          content: JSON.stringify({
+            app: blueprint.app,
+            roles: blueprint.roles,
+            features: blueprint.features.filter((f) => f.mvp).map((f) => ({ name: f.name, stories: f.stories })),
+            pages: blueprint.pages,
+            entities: blueprint.entities,
+            design: blueprint.design,
+            decisions: minutes?.decisions ?? [],
+          }),
+        },
+      ],
+    });
+    plan = { tasks: clean(result.tasks), api: result.api };
   }
-  const tasks = (plan ?? DEFAULT_PLAN).map((t) => ({ ...t, status: "waiting" as const }));
+  const tasks: Task[] = plan.tasks.map((t) => ({ ...t, status: "waiting" as const }));
   // QA always runs last
-  tasks.push({ id: "QA", agent: "qa" as const, title: "Run the edge-case tests", dependsOn: tasks.map((t) => t.id), files: [], status: "waiting" });
-  return tasks;
+  tasks.push({ id: "QA", agent: "qa", title: "Run the edge-case tests", dependsOn: tasks.map((t) => t.id), files: [], status: "waiting" });
+  return { tasks, api: plan.api };
+}
+
+// The contract as compact lines for prompts: "POST /api/projects [login] body { title } -> 201 { project }. rules"
+export function contractText(api: Endpoint[]): string {
+  return api.map((e) => `${e.method} ${e.path} [${e.auth}]${e.body ? ` body ${e.body}` : ""}${e.returns ? ` -> ${e.returns}` : ""}${e.rules ? `. ${e.rules}` : ""}`).join("\n");
 }

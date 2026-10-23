@@ -1,159 +1,103 @@
-// Edge-case tests for a generated marketplace. They check the core API in templates/marketplace/CONVENTIONS.md.
-// Usage: node tests/edge-cases/run.mjs http://localhost:4100
+// Edge-case tests for any generated app. The QA agent writes them from the app's API contract (lib/agents/qa.ts) as JSON;
+// this runner executes them, plus smoke tests every app must pass (pages load, login works, no server errors).
+// Usage: node tests/edge-cases/run.mjs <app url> <tests.json> <public dir>
+// Test format: { name, area, steps: [{ as: "anon"|"alice"|"bob", method, path, body?, expect: [statuses], save?: { var: "json.path" } }] }
+// "{{var}}" in a path or body string is replaced by a saved value; "{{run}}" by a value unique to this run;
+// "{{long:N}}" by N characters.
 // Prints one JSON array: [{ name, area, passed, detail }]
+import { readdirSync, readFileSync } from "node:fs";
 
-const base = process.argv[2] ?? "http://localhost:4000";
+const [base = "http://localhost:4000", testsFile, publicDir] = process.argv.slice(2);
 const runId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const serverErrors = [];
 
 async function call(method, path, { token, body } = {}) {
   const res = await fetch(base + path, {
     method,
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined || method === "GET" ? undefined : JSON.stringify(body),
   });
+  const text = await res.text();
   let data = null;
-  try { data = await res.json(); } catch {}
-  return { status: res.status, data };
+  try { data = JSON.parse(text); } catch {}
+  if (res.status >= 500) serverErrors.push(`${method} ${path} -> ${res.status} ${text.slice(0, 150)}`);
+  return { status: res.status, data, text };
 }
 
-let userCount = 0;
-async function newUser() {
-  const email = `t${runId}-${++userCount}@test.dev`;
-  const r = await call("POST", "/api/auth/register", { body: { email, password: "secret123", name: `Tester ${userCount}` } });
-  if (r.status !== 201) throw new Error(`Setup failed: register returned ${r.status}`);
-  return r.data.token;
+const tokens = {};
+async function tokenFor(who) {
+  if (!who || who === "anon") return undefined;
+  if (tokens[who]) return tokens[who];
+  const r = await call("POST", "/api/auth/register", { body: { email: `${who}-${runId}@test.dev`, password: "secret123", name: who[0].toUpperCase() + who.slice(1) } });
+  if (r.status !== 201 || !r.data?.token) throw new Error(`Setup failed: registering ${who} returned ${r.status}`);
+  return (tokens[who] = r.data.token);
 }
 
-async function newListing(token, overrides = {}) {
-  const r = await call("POST", "/api/listings", {
-    token,
-    body: { title: `Calculus textbook ${runId}`, description: "Good condition", price_cents: 2500, quantity: 1, ...overrides },
-  });
-  if (r.status !== 201 || !r.data?.listing?.id) throw new Error(`Creating a listing returned ${r.status}: ${JSON.stringify(r.data)}`);
-  return r.data.listing;
+const pick = (obj, path) => path.split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
+
+function fill(value, vars) {
+  if (typeof value === "string") {
+    // "{{long:5001}}" becomes 5001 characters: models can't type out long strings themselves
+    value = value.replace(/\{\{long:(\d{1,6})\}\}/g, (m, n) => "a".repeat(Number(n)));
+    const whole = value.match(/^\{\{(\w+)\}\}$/);
+    if (whole && whole[1] in vars) return vars[whole[1]]; // keep numbers as numbers
+    return value.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
+  }
+  if (Array.isArray(value)) return value.map((v) => fill(v, vars));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, fill(v, vars)]));
+  return value;
 }
 
-function expectStatus(r, allowed, what) {
-  const ok = Array.isArray(allowed) ? allowed.includes(r.status) : r.status === allowed;
-  if (!ok) throw new Error(`${what}: expected ${allowed}, got ${r.status} ${JSON.stringify(r.data)?.slice(0, 200)}`);
+async function runSteps(steps) {
+  const vars = { run: runId };
+  for (const [i, step] of steps.entries()) {
+    const path = fill(step.path, vars);
+    if (/\{\{\w+\}\}/.test(path)) throw new Error(`Step ${i + 1}: ${path} uses a value an earlier step didn't save`);
+    const r = await call(step.method, path, { token: await tokenFor(step.as), body: fill(step.body, vars) });
+    const expect = [].concat(step.expect ?? 200);
+    if (!expect.includes(r.status)) {
+      throw new Error(`${step.as ?? "anon"} ${step.method} ${path}: expected ${expect.join(" or ")}, got ${r.status} ${(r.text || "").slice(0, 200)}`);
+    }
+    for (const [name, at] of Object.entries(step.save ?? {})) {
+      const v = pick(r.data, at);
+      if (v === undefined) throw new Error(`${step.method} ${path}: the response had no "${at}" (${(r.text || "").slice(0, 200)})`);
+      vars[name] = v;
+    }
+  }
 }
+
+const generated = testsFile ? JSON.parse(readFileSync(testsFile, "utf8")) : [];
+const pages = publicDir ? readdirSync(publicDir).filter((f) => f.endsWith(".html")) : [];
 
 const tests = [
+  ...generated.map((t) => ({ name: t.name, area: t.area ?? "api", run: () => runSteps(t.steps ?? []) })),
   {
-    name: "Creating a listing requires login",
-    area: "auth",
-    run: async () => expectStatus(await call("POST", "/api/listings", { body: { title: "x", price_cents: 100 } }), 401, "POST /api/listings without login"),
-  },
-  {
-    name: "Negative price is rejected",
-    area: "data",
+    name: "Every page loads",
+    area: "pages",
     run: async () => {
-      const t = await newUser();
-      expectStatus(await call("POST", "/api/listings", { token: t, body: { title: "Book", description: "", price_cents: -500 } }), 400, "price_cents -500");
+      const broken = [];
+      for (const p of pages) {
+        const r = await call("GET", "/" + p.replace(/\.html$/, "").replace(/^index$/, ""));
+        if (r.status !== 200) broken.push(`${p} (${r.status})`);
+      }
+      if (broken.length) throw new Error(`These pages don't load: ${broken.join(", ")}`);
     },
   },
   {
-    name: "Empty title is rejected",
-    area: "data",
-    run: async () => {
-      const t = await newUser();
-      expectStatus(await call("POST", "/api/listings", { token: t, body: { title: "   ", description: "", price_cents: 500 } }), 400, "blank title");
-    },
-  },
-  {
-    name: "Very long title is rejected",
-    area: "data",
-    run: async () => {
-      const t = await newUser();
-      expectStatus(await call("POST", "/api/listings", { token: t, body: { title: "A".repeat(5000), description: "", price_cents: 500 } }), [400, 413], "5000-character title");
-    },
-  },
-  {
-    name: "Nobody can edit someone else's listing",
+    name: "Sign-up and login work",
     area: "auth",
     run: async () => {
-      const seller = await newUser();
-      const other = await newUser();
-      const listing = await newListing(seller);
-      expectStatus(await call("PATCH", `/api/listings/${listing.id}`, { token: other, body: { price_cents: 1 } }), 403, "PATCH by another user");
+      const r = await call("GET", "/api/auth/me", { token: await tokenFor("carol") });
+      if (r.status !== 200) throw new Error(`/api/auth/me returned ${r.status} for a new user`);
     },
   },
   {
-    name: "Sellers can't buy their own listing",
-    area: "features",
-    run: async () => {
-      const seller = await newUser();
-      const listing = await newListing(seller);
-      expectStatus(await call("POST", "/api/orders", { token: seller, body: { listing_id: listing.id } }), 400, "seller buying own listing");
-    },
-  },
-  {
-    name: "The last item can't be sold twice",
-    area: "payments",
-    run: async () => {
-      const seller = await newUser();
-      const buyerA = await newUser();
-      const buyerB = await newUser();
-      const listing = await newListing(seller, { quantity: 1 });
-      expectStatus(await call("POST", "/api/orders", { token: buyerA, body: { listing_id: listing.id } }), 201, "first purchase");
-      expectStatus(await call("POST", "/api/orders", { token: buyerB, body: { listing_id: listing.id } }), 409, "second purchase of a sold-out item");
-    },
-  },
-  {
-    name: "A repeated payment confirmation is ignored",
-    area: "payments",
-    run: async () => {
-      const seller = await newUser();
-      const buyer = await newUser();
-      const listing = await newListing(seller);
-      const order = await call("POST", "/api/orders", { token: buyer, body: { listing_id: listing.id } });
-      expectStatus(order, 201, "placing the order");
-      const body = { order_id: order.data.order.id, payment_id: `pay_${runId}` };
-      expectStatus(await call("POST", "/api/payments/confirm", { token: buyer, body }), 200, "first confirmation");
-      const again = await call("POST", "/api/payments/confirm", { token: buyer, body });
-      expectStatus(again, 200, "same confirmation sent again");
-      if (again.data?.order?.status !== "paid") throw new Error(`After a repeated confirmation the order status is ${again.data?.order?.status}, expected paid`);
-    },
-  },
-  {
-    name: "An order can't be refunded twice",
-    area: "payments",
-    run: async () => {
-      const seller = await newUser();
-      const buyer = await newUser();
-      const listing = await newListing(seller);
-      const order = await call("POST", "/api/orders", { token: buyer, body: { listing_id: listing.id } });
-      expectStatus(order, 201, "placing the order");
-      const id = order.data.order.id;
-      expectStatus(await call("POST", "/api/payments/confirm", { token: buyer, body: { order_id: id, payment_id: `pay2_${runId}` } }), 200, "paying");
-      expectStatus(await call("POST", `/api/orders/${id}/refund`, { token: buyer }), 200, "first refund");
-      expectStatus(await call("POST", `/api/orders/${id}/refund`, { token: buyer }), 409, "second refund");
-    },
-  },
-  {
-    name: "Search works with emoji",
-    area: "features",
-    run: async () => {
-      const seller = await newUser();
-      const listing = await newListing(seller, { title: `📚 Physics notes ${runId}` });
-      const r = await call("GET", `/api/listings?q=${encodeURIComponent("📚")}`);
-      expectStatus(r, 200, "search for 📚");
-      if (!r.data?.items?.some((i) => i.id === listing.id)) throw new Error("The emoji listing was not in the search results");
-    },
-  },
-  {
-    name: "A page past the end returns an empty list",
+    name: "Unknown API paths return a clear 404",
     area: "api",
     run: async () => {
-      const r = await call("GET", "/api/listings?page=9999");
-      expectStatus(r, 200, "page 9999");
-      if (!Array.isArray(r.data?.items) || r.data.items.length !== 0) throw new Error(`Expected items: [], got ${JSON.stringify(r.data).slice(0, 200)}`);
+      const r = await call("GET", `/api/nothing-here-${runId}`);
+      if (r.status !== 404 || !r.data?.error) throw new Error(`Expected a JSON 404, got ${r.status}`);
     },
-  },
-  {
-    name: "A missing listing returns 404",
-    area: "api",
-    run: async () => expectStatus(await call("GET", "/api/listings/99999999"), 404, "unknown listing id"),
   },
 ];
 
@@ -166,4 +110,10 @@ for (const t of tests) {
     results.push({ name: t.name, area: t.area, passed: false, detail: String(err.message ?? err) });
   }
 }
+// Runs last so it covers every request above
+results.push(
+  serverErrors.length
+    ? { name: "No request crashes the server", area: "api", passed: false, detail: serverErrors.slice(0, 5).join("\n") }
+    : { name: "No request crashes the server", area: "api", passed: true },
+);
 console.log(JSON.stringify(results));
