@@ -11,3 +11,4 @@ workspaces/
 .next/
 next-env.d.ts
 *.tsbuildinfo
+.next-*/

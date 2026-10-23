@@ -82,17 +82,27 @@ async function chat(model: string, messages: Message[], temperature: number, max
 
   for (let attempt = 0; attempt < 8; attempt++) {
     await reserve(model, estimateTokens(messages.map((m) => m.content).join("\n")) + maxTokens);
-    const res = await fetch(`${config.groqBaseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.groqKey}` },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-        response_format: { type: "json_object" },
-      }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${config.groqBaseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.groqKey}` },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature,
+          max_tokens: maxTokens,
+          response_format: { type: "json_object" },
+        }),
+        signal: AbortSignal.timeout(120_000),
+      });
+    } catch (err) {
+      // Dropped Wi-Fi, DNS hiccup or a stalled connection: wait and try again
+      const wait = 1500 * 2 ** attempt;
+      console.warn(`[llm] ${model} network error (${(err as Error & { cause?: { code?: string } }).cause?.code ?? (err as Error).name}), retrying in ${wait}ms`);
+      await sleep(Math.min(wait, 30_000));
+      continue;
+    }
 
     if (res.status === 429 || res.status >= 500) {
       const wait =
@@ -110,7 +120,7 @@ async function chat(model: string, messages: Message[], temperature: number, max
     const data = await res.json();
     return data.choices?.[0]?.message?.content ?? "";
   }
-  throw new Error(`Groq kept rate-limiting model ${model}; try again in a minute or lower LLM_CONCURRENCY.`);
+  throw new Error(`Couldn't get an answer from Groq (${model}) after several tries. Check the internet connection, or wait a minute if Groq is rate-limiting.`);
 }
 
 // Some models wrap JSON in prose or <think> blocks; pull out the outermost object.

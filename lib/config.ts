@@ -12,7 +12,7 @@ export const config = {
     big: process.env.GROQ_MODEL_BIG ?? "openai/gpt-oss-120b",
     small: process.env.GROQ_MODEL_SMALL ?? "openai/gpt-oss-20b",
     parliament: list(process.env.GROQ_PARLIAMENT_MODELS, [
-      "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
       "qwen/qwen3.8-27b",
       "openai/gpt-oss-20b",
       "qwen/qwen3.8-27b",

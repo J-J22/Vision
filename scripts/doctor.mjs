@@ -54,7 +54,7 @@ if (!quick && key) {
       const wanted = [
         env.GROQ_MODEL_BIG || "openai/gpt-oss-120b",
         env.GROQ_MODEL_SMALL || "openai/gpt-oss-20b",
-        ...(env.GROQ_PARLIAMENT_MODELS || "openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b,qwen/qwen3.8-27b").split(",").map((s) => s.trim()),
+        ...(env.GROQ_PARLIAMENT_MODELS || "openai/gpt-oss-20b,qwen/qwen3.8-27b,openai/gpt-oss-20b,qwen/qwen3.8-27b").split(",").map((s) => s.trim()),
       ];
       const missing = [...new Set(wanted)].filter((m) => !ids.has(m));
       report(!missing.length, "Configured models exist on this Groq account", `Not available: ${missing.join(", ")}. Run npm run models and update .env.local`);
