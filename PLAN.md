@@ -95,16 +95,18 @@ type BuildEvent =
 
 ## Who does what
 
-| | Dev A: models and agents (Groq owner) | Dev B: Discovery and UI | Dev C: template, sandbox, tests |
+Each person owns one stage end to end: its AI prompts, its server code and its screen.
+
+| | Person 1: Discovery, then QA | Person 2: Build pipeline (Groq owner) | Person 3: Code writers and sandbox |
 |---|---|---|---|
-| 16:00–17:00 | Groq key working; `lib/llm.ts` returns validated JSON | Next.js app scaffold, `lib/types.ts`, page layout | Marketplace starter template that runs |
-| 17:00–21:00 | Planner, backend, frontend and QA prompts; test them on a hard-coded Blueprint | Discovery prompt (profile questions first, then the checklist, level-adapted wording); chat UI; live Blueprint panel | `sandbox.ts`: copy template, write files, start app, run tests; write ~10 edge-case tests |
-| **21:00** | **Checkpoint 1:** an agent writes a file that runs | **Checkpoint 1:** Discovery produces a full Blueprint | **Checkpoint 1:** template runs from code; tests report pass/fail |
-| 21:30–01:00 | `runner.ts` with dependency order and the event stream | Approve button → `/build` page; task board and feed from the event stream | Preview link; connect the test results to the runner |
+| 16:00–17:00 | Next.js scaffold, `lib/types.ts`, `lib/sample-blueprint.json`; push by 16:45 | `lib/llm.ts` Groq wrapper returning validated JSON; push by 17:00 | Marketplace starter template that runs |
+| 17:00–21:00 | Discovery prompt (profile questions first, then the checklist, level-adapted wording), `/api/discovery`, chat UI, live Blueprint panel | Planner agent (Blueprint → tasks), `runner.ts` with fake agents, `/api/build` + event stream | Backend and frontend agents; `sandbox.ts`: create workspace, write files, start and stop the app |
+| **21:00** | **Checkpoint 1:** Discovery produces a full Blueprint in ≤10 turns | **Checkpoint 1:** fake agents run in dependency order, events stream | **Checkpoint 1:** backend agent code runs in a workspace |
+| 21:30–01:00 | Approve button; ~10 edge-case tests; QA agent | Plug in the real agents; `/build` task board and agent feed | `runTests`; preview panel; clean up old processes |
 | **01:00** | **Checkpoint 2: the full flow works once, as a team** | | |
-| 01:00–04:00 | QA fail → fix task for the owning agent (1 retry) | Polish: coverage ticks, level badge, animations | Edge cases that make a good demo moment (double-buy of the last item) |
+| 01:00–04:00 | Double-buy demo moment; Discovery polish | Fix loop (failed test → fix task, 1 retry); reliability runs | Tune code-writing prompts; stretch: one-command deploy |
 | 04:00–05:30 | **Feature freeze.** Run the full demo 3 times. Fix crashes only. | | Record the best run as a backup video |
-| 05:30–07:00 | Pitch, README, slides; sleep in turns | | |
+| 05:30–07:00 | Drive the live demo | Explain the agent team | README, slides; sleep in turns |
 
 ## Groq: limits to plan around
 

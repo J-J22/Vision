@@ -61,6 +61,17 @@ header { display: flex; flex-direction: column; gap: 14px; }
 .goal .flow { font-size: 0.95rem; }
 .goal .flow span { white-space: nowrap; }
 
+/* Ownership map */
+.split { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.slice { border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; background: var(--a-soft); }
+.slice.b { background: var(--b-soft); } .slice.c { background: var(--c-soft); }
+.slice .who { font-family: var(--font-mono); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--a); font-weight: 500; }
+.slice.b .who { color: var(--b); } .slice.c .who { color: var(--c); }
+.slice strong { font-family: var(--font-display); font-size: 1.05rem; }
+.slice dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; font-size: 0.86rem; }
+.slice dt { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); padding-top: 2px; }
+.slice dd { margin: 0; }
+
 /* Checkpoint timeline */
 .timeline { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; font-variant-numeric: tabular-nums; }
 .tick { border-top: 3px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -99,6 +110,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .block.now .time { color: var(--p); font-weight: 500; }
 .block.now .time::after { content: "now"; display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; }
 .block .body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.kind { display: flex; flex-wrap: wrap; gap: 6px; }
+.kind span { font-family: var(--font-mono); font-size: 0.7rem; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .tasks label { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; font-size: 0.94rem; cursor: pointer; }
 .tasks input { margin: 4px 0 0; accent-color: var(--p); width: 16px; height: 16px; }
@@ -117,7 +130,7 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
 
 @media (max-width: 720px) {
   .timeline { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 14px; }
-  .grid2 { grid-template-columns: 1fr; }
+  .grid2, .split { grid-template-columns: 1fr; }
   .block { grid-template-columns: 1fr; gap: 6px; }
   body { padding-block: 28px 56px; }
 }
@@ -129,7 +142,7 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
 <header>
   <span class="eyebrow">Vision · hackathon build night</span>
   <h1>Who builds what, hour by hour</h1>
-  <p class="muted">16:00 → 07:00. Three developers, models on Groq. Full details and the shared data formats are in <code>PLAN.md</code> in the repo.</p>
+  <p class="muted">16:00 → 07:00. Three developers, models on Groq. Each person owns one stage of the product end to end: its AI prompts, its server code and its screen. Full details and the shared data formats are in <code>PLAN.md</code> in the repo.</p>
   <div class="goal">
     <span class="eyebrow">The one goal: working end to end by 01:00</span>
     <p class="flow"><span>Chat →</span> <span>Discovery asks about you →</span> <span>Blueprint fills in →</span> <span>Approve →</span> <span>task list →</span> <span>agents write code →</span> <span>tests run →</span> <span>marketplace opens</span></p>
@@ -137,11 +150,33 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
 </header>
 
 <section>
+  <span class="eyebrow">Ownership</span>
+  <h2>Everyone does AI, server and UI</h2>
+  <div class="split">
+    <div class="slice">
+      <span class="who">Person 1</span>
+      <strong>Discovery, then QA</strong>
+      <dl><dt>AI</dt><dd>Discovery prompt, QA agent</dd><dt>Server</dt><dd>Discovery API, edge-case tests</dd><dt>UI</dt><dd>Chat, live Blueprint</dd></dl>
+    </div>
+    <div class="slice b">
+      <span class="who">Person 2 · Groq owner</span>
+      <strong>Build pipeline</strong>
+      <dl><dt>AI</dt><dd>Groq wrapper, planner agent</dd><dt>Server</dt><dd>Runner, live event stream</dd><dt>UI</dt><dd>Task board, agent feed</dd></dl>
+    </div>
+    <div class="slice c">
+      <span class="who">Person 3</span>
+      <strong>Code writers &amp; sandbox</strong>
+      <dl><dt>AI</dt><dd>Backend and frontend agents</dd><dt>Server</dt><dd>Template, sandbox runner</dd><dt>UI</dt><dd>Preview panel</dd></dl>
+    </div>
+  </div>
+</section>
+
+<section>
   <span class="eyebrow">Checkpoints</span>
   <div class="timeline" id="timeline">
     <div class="tick" data-at="960"><b>16:00</b><span>Kickoff, agree data formats</span></div>
-    <div class="tick" data-at="1020"><b>17:00</b><span>Everyone's setup works</span></div>
-    <div class="tick key" data-at="1260"><b>21:00</b><span>Each part works alone</span></div>
+    <div class="tick" data-at="1020"><b>17:00</b><span>Scaffold, Groq wrapper, template ready</span></div>
+    <div class="tick key" data-at="1260"><b>21:00</b><span>Each stage works alone</span></div>
     <div class="tick key" data-at="1500"><b>01:00</b><span>Full flow works together</span></div>
     <div class="tick key" data-at="1680"><b>04:00</b><span>Feature freeze</span></div>
     <div class="tick" data-at="1770"><b>05:30</b><span>Pitch prep, 07:00 submit</span></div>
@@ -150,168 +185,179 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
 
 <nav class="filter" aria-label="Show plan for">
   <button type="button" id="f-all" data-show="all" aria-pressed="true">Everyone</button>
-  <button type="button" id="f-deva" data-show="deva" aria-pressed="false">Dev A · Models &amp; agents</button>
-  <button type="button" id="f-devb" data-show="devb" aria-pressed="false">Dev B · Discovery &amp; UI</button>
-  <button type="button" id="f-devc" data-show="devc" aria-pressed="false">Dev C · Template &amp; tests</button>
+  <button type="button" id="f-p1" data-show="p1" aria-pressed="false">Person 1 · Discovery &amp; QA</button>
+  <button type="button" id="f-p2" data-show="p2" aria-pressed="false">Person 2 · Build pipeline</button>
+  <button type="button" id="f-p3" data-show="p3" aria-pressed="false">Person 3 · Code writers</button>
 </nav>
 
-<!-- Dev A -->
-<section class="lane a" id="deva">
+<!-- Person 1 -->
+<section class="lane a" id="p1">
   <div class="lane-head">
-    <span class="who">Dev A · Groq owner</span>
-    <h2>Models &amp; agents</h2>
-    <p>Makes the AI calls reliable and writes the agents that turn a Blueprint into code.</p>
-    <div class="owns"><code>lib/llm.ts</code><code>lib/agents/planner.ts</code><code>lib/agents/backend.ts</code><code>lib/agents/frontend.ts</code><code>lib/agents/qa.ts</code><code>lib/runner.ts</code></div>
-    <span class="progress" data-progress></span>
-  </div>
-  <div>
-    <div class="block" data-from="960" data-to="1020"><div class="time">16:00–17:00</div><div class="body">
-      <h3>Groq wrapper</h3>
-      <ul class="tasks">
-        <li><label><input type="checkbox" id="a1"><span>Groq API key in <code>.env.local</code>, first call succeeds</span></label></li>
-        <li><label><input type="checkbox" id="a2"><span><code>callLLM({ model, system, messages, schema })</code> returns JSON checked against a schema</span></label></li>
-        <li><label><input type="checkbox" id="a3"><span>On bad JSON, retry once with the error. On a rate-limit error (429), wait and retry.</span></label></li>
-        <li><label><input type="checkbox" id="a4"><span>Pick a big model (planner, backend) and a small fast one (Discovery, QA); put both names in config</span></label></li>
-      </ul>
-    </div></div>
-    <div class="block" data-from="1020" data-to="1260"><div class="time">17:00–21:00</div><div class="body">
-      <h3>Agent prompts</h3>
-      <ul class="tasks">
-        <li><label><input type="checkbox" id="a5"><span>Write <code>lib/sample-blueprint.json</code> (a textbook marketplace) to test against</span></label></li>
-        <li><label><input type="checkbox" id="a6"><span>Planner: Blueprint → list of tasks with owners and dependencies</span></label></li>
-        <li><label><input type="checkbox" id="a7"><span>Backend: Express routes + SQLite tables, built on the template</span></label></li>
-        <li><label><input type="checkbox" id="a8"><span>Frontend: HTML pages that call the API</span></label></li>
-        <li><label><input type="checkbox" id="a9"><span>QA: picks tests from Dev C's edge-case list; reports failures</span></label></li>
-        <li><label><input type="checkbox" id="a10"><span>Every agent returns <code>{ files, note }</code>; the note is a message to the other agents</span></label></li>
-      </ul>
-      <div class="check"><b>21:00 checkpoint</b>Code from the backend agent, written to disk by Dev C's sandbox, starts and answers a request.</div>
-    </div></div>
-    <div class="block" data-from="1260" data-to="1290"><div class="time">21:00–21:30</div><div class="body"><p class="together">Sync with the team, eat, merge.</p></div></div>
-    <div class="block" data-from="1290" data-to="1500"><div class="time">21:30–01:00</div><div class="body">
-      <h3>The runner</h3>
-      <ul class="tasks">
-        <li><label><input type="checkbox" id="a11"><span>Run every task whose dependencies are done, at most 2 at a time</span></label></li>
-        <li><label><input type="checkbox" id="a12"><span>Give each agent only its Blueprint slice, the files it needs and the other agents' notes</span></label></li>
-        <li><label><input type="checkbox" id="a13"><span>Send <code>task</code> and <code>message</code> events to the UI as each task changes</span></label></li>
-      </ul>
-      <div class="check"><b>01:00 checkpoint · whole team</b>Approve a Blueprint and get a running marketplace, with no hand-fixing.</div>
-    </div></div>
-    <div class="block" data-from="1500" data-to="1680"><div class="time">01:00–04:00</div><div class="body">
-      <h3>Fix loop and tuning</h3>
-      <ul class="tasks">
-        <li><label><input type="checkbox" id="a14"><span>Failed test → new fix task for the agent that owns that code, with the error attached (1 retry)</span></label></li>
-        <li><label><input type="checkbox" id="a15"><span>Run the full build 5+ times; fix the prompts behind the most common failures</span></label></li>
-      </ul>
-    </div></div>
-    <div class="block" data-from="1680" data-to="1770"><div class="time">04:00–05:30</div><div class="body"><p class="together">Feature freeze. Run the full demo 3 times with the team. Fix crashes only.</p></div></div>
-    <div class="block" data-from="1770" data-to="1860"><div class="time">05:30–07:00</div><div class="body"><p class="together">Explain the agent system in the pitch. Sleep in turns.</p></div></div>
-  </div>
-</section>
-
-<!-- Dev B -->
-<section class="lane b" id="devb">
-  <div class="lane-head">
-    <span class="who">Dev B</span>
-    <h2>Discovery &amp; UI</h2>
-    <p>Owns everything the user sees: the Discovery chat, the live Blueprint and the build screen.</p>
-    <div class="owns"><code>lib/types.ts</code><code>app/discovery</code><code>app/build</code><code>app/api/discovery</code><code>lib/agents/discovery.ts</code></div>
+    <span class="who">Person 1</span>
+    <h2>Discovery, then QA</h2>
+    <p>Owns the front door of the product, the part judges see first. After 21:00, owns the agent that tries to break the generated app.</p>
+    <div class="owns"><code>lib/types.ts</code><code>lib/agents/discovery.ts</code><code>app/api/discovery</code><code>app/discovery</code><code>lib/agents/qa.ts</code><code>tests/edge-cases</code></div>
     <span class="progress" data-progress></span>
   </div>
   <div>
     <div class="block" data-from="960" data-to="1020"><div class="time">16:00–17:00</div><div class="body">
       <h3>Project scaffold</h3>
+      <div class="kind"><span>setup</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="b1"><span>Create the Next.js app (TypeScript) in the repo and push it so others can start</span></label></li>
-        <li><label><input type="checkbox" id="b2"><span>Copy the shared types from <code>PLAN.md</code> into <code>lib/types.ts</code></span></label></li>
-        <li><label><input type="checkbox" id="b3"><span>Empty layouts for <code>/discovery</code> (chat left, Blueprint right) and <code>/build</code></span></label></li>
+        <li><label><input type="checkbox" id="p1-1"><span>Create the Next.js app (TypeScript) in the repo and push it by 16:45, so others can build on it</span></label></li>
+        <li><label><input type="checkbox" id="p1-2"><span>Copy the shared types from <code>PLAN.md</code> into <code>lib/types.ts</code></span></label></li>
+        <li><label><input type="checkbox" id="p1-3"><span>Write <code>lib/sample-blueprint.json</code> (a textbook marketplace) so Persons 2 and 3 can test without Discovery</span></label></li>
       </ul>
     </div></div>
     <div class="block" data-from="1020" data-to="1260"><div class="time">17:00–21:00</div><div class="body">
       <h3>Discovery</h3>
+      <div class="kind"><span>AI</span><span>server</span><span>UI</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="b4"><span>Prompt opens with 3–4 questions about the user, then sets their level: beginner, some tech, developer</span></label></li>
-        <li><label><input type="checkbox" id="b5"><span>Then walks the coverage checklist: users, features, pages, data, API, login, payments, scale, hosting</span></label></li>
-        <li><label><input type="checkbox" id="b6"><span>Words each question for the user's level, offers choices and marks the recommended one</span></label></li>
-        <li><label><input type="checkbox" id="b7"><span>Each turn returns <code>{ reply, blueprintPatch, coverage, done }</code>; skipped topics become written-down defaults</span></label></li>
-        <li><label><input type="checkbox" id="b8"><span>Chat UI with clickable answer options; Blueprint panel and checklist update live</span></label></li>
+        <li><label><input type="checkbox" id="p1-4"><span>Prompt opens with 3–4 questions about the user, then sets their level: beginner, some tech, developer</span></label></li>
+        <li><label><input type="checkbox" id="p1-5"><span>Then walks the coverage checklist: users, features, pages, data, API, login, payments, scale, hosting</span></label></li>
+        <li><label><input type="checkbox" id="p1-6"><span>Words each question for the user's level, offers choices and marks the recommended one</span></label></li>
+        <li><label><input type="checkbox" id="p1-7"><span><code>/api/discovery</code>: each turn returns <code>{ reply, blueprintPatch, coverage, done }</code></span></label></li>
+        <li><label><input type="checkbox" id="p1-8"><span>Chat screen with clickable answer options; Blueprint panel and checklist update live</span></label></li>
       </ul>
       <div class="check"><b>21:00 checkpoint</b>Answering as a non-technical user gives a complete Blueprint in 10 turns or fewer.</div>
     </div></div>
     <div class="block" data-from="1260" data-to="1290"><div class="time">21:00–21:30</div><div class="body"><p class="together">Sync with the team, eat, merge.</p></div></div>
     <div class="block" data-from="1290" data-to="1500"><div class="time">21:30–01:00</div><div class="body">
-      <h3>Build screen</h3>
+      <h3>Hand-off and QA</h3>
+      <div class="kind"><span>AI</span><span>server</span><span>UI</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="b9"><span>Approve button sends the Blueprint to <code>/api/build</code> and opens <code>/build</code></span></label></li>
-        <li><label><input type="checkbox" id="b10"><span>Task board (waiting, running, done, failed) driven by the live event stream</span></label></li>
-        <li><label><input type="checkbox" id="b11"><span>Agent feed showing the notes agents leave each other, plus test results and the preview link</span></label></li>
+        <li><label><input type="checkbox" id="p1-9"><span>Approve button sends the Blueprint to <code>/api/build</code> and opens <code>/build</code></span></label></li>
+        <li><label><input type="checkbox" id="p1-10"><span>~10 HTTP edge-case tests: double-buy of the last item, negative price, editing someone else's listing, empty fields, huge title, ordering while logged out, duplicate payment confirmation, emoji in search, refund twice, page out of range</span></label></li>
+        <li><label><input type="checkbox" id="p1-11"><span>QA agent: picks the tests that fit this Blueprint and explains each failure in plain words</span></label></li>
       </ul>
       <div class="check"><b>01:00 checkpoint · whole team</b>Approve a Blueprint and get a running marketplace, with no hand-fixing.</div>
     </div></div>
     <div class="block" data-from="1500" data-to="1680"><div class="time">01:00–04:00</div><div class="body">
-      <h3>Polish</h3>
+      <h3>Demo moment and polish</h3>
+      <div class="kind"><span>AI</span><span>UI</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="b12"><span>Level badge, coverage ticks, smooth streaming text (show off Groq's speed)</span></label></li>
-        <li><label><input type="checkbox" id="b13"><span>Clear loading and error states, so a failed call never shows a blank screen</span></label></li>
+        <li><label><input type="checkbox" id="p1-12"><span>Make sure the double-buy test reliably catches a purchase that isn't wrapped in a database transaction</span></label></li>
+        <li><label><input type="checkbox" id="p1-13"><span>Discovery polish: level badge, coverage ticks, smooth streaming text (show off Groq's speed), error states</span></label></li>
       </ul>
     </div></div>
-    <div class="block" data-from="1680" data-to="1770"><div class="time">04:00–05:30</div><div class="body"><p class="together">Feature freeze. Write the exact demo answers you'll type. Run the demo 3 times.</p></div></div>
+    <div class="block" data-from="1680" data-to="1770"><div class="time">04:00–05:30</div><div class="body"><p class="together">Feature freeze. Write the exact demo answers you'll type. Run the demo 3 times with the team.</p></div></div>
     <div class="block" data-from="1770" data-to="1860"><div class="time">05:30–07:00</div><div class="body"><p class="together">Drive the live demo in the pitch. Sleep in turns.</p></div></div>
   </div>
 </section>
 
-<!-- Dev C -->
-<section class="lane c" id="devc">
+<!-- Person 2 -->
+<section class="lane b" id="p2">
   <div class="lane-head">
-    <span class="who">Dev C</span>
-    <h2>Template, sandbox &amp; tests</h2>
-    <p>Gives the agents a working app to build on, a place to run it and the tests that try to break it.</p>
-    <div class="owns"><code>templates/marketplace</code><code>lib/sandbox.ts</code><code>tests/edge-cases</code><code>backup video</code></div>
+    <span class="who">Person 2 · Groq owner</span>
+    <h2>Build pipeline</h2>
+    <p>Owns the AI project manager: turning the Blueprint into tasks, running them in the right order and showing the team at work.</p>
+    <div class="owns"><code>lib/llm.ts</code><code>lib/agents/planner.ts</code><code>lib/runner.ts</code><code>app/api/build</code><code>app/build</code></div>
+    <span class="progress" data-progress></span>
+  </div>
+  <div>
+    <div class="block" data-from="960" data-to="1020"><div class="time">16:00–17:00</div><div class="body">
+      <h3>Groq wrapper</h3>
+      <div class="kind"><span>AI</span></div>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="p2-1"><span>Groq API key in <code>.env.local</code>, first call succeeds</span></label></li>
+        <li><label><input type="checkbox" id="p2-2"><span><code>callLLM({ model, system, messages, schema })</code> returns JSON checked against a schema; push by 17:00, everyone uses it</span></label></li>
+        <li><label><input type="checkbox" id="p2-3"><span>On bad JSON, retry once with the error. On a rate-limit error (429), wait and retry.</span></label></li>
+        <li><label><input type="checkbox" id="p2-4"><span>Pick a big model (planner, code writers) and a small fast one (Discovery, QA); put both names in config</span></label></li>
+      </ul>
+    </div></div>
+    <div class="block" data-from="1020" data-to="1260"><div class="time">17:00–21:00</div><div class="body">
+      <h3>Planner and runner</h3>
+      <div class="kind"><span>AI</span><span>server</span></div>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="p2-5"><span>Planner agent: Blueprint → task list with owners, dependencies and the files each task may write</span></label></li>
+        <li><label><input type="checkbox" id="p2-6"><span><code>runner.ts</code>: runs every task whose dependencies are done, at most 2 at a time; test it with fake agents that just wait and return a note</span></label></li>
+        <li><label><input type="checkbox" id="p2-7"><span><code>/api/build</code> starts a run; <code>/api/build/events</code> streams <code>task</code>, <code>message</code>, <code>test</code> and <code>preview</code> events</span></label></li>
+      </ul>
+      <div class="check"><b>21:00 checkpoint</b>The sample Blueprint becomes a task list, and fake agents run in dependency order with events streaming.</div>
+    </div></div>
+    <div class="block" data-from="1260" data-to="1290"><div class="time">21:00–21:30</div><div class="body"><p class="together">Sync with the team, eat, merge.</p></div></div>
+    <div class="block" data-from="1290" data-to="1500"><div class="time">21:30–01:00</div><div class="body">
+      <h3>Build screen and real agents</h3>
+      <div class="kind"><span>server</span><span>UI</span></div>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="p2-8"><span>Swap the fake agents for Person 3's real ones and Person 1's QA agent</span></label></li>
+        <li><label><input type="checkbox" id="p2-9"><span><code>/build</code> task board (waiting, running, done, failed) driven by the event stream</span></label></li>
+        <li><label><input type="checkbox" id="p2-10"><span>Agent feed showing the notes agents leave each other ("backend: /api/listings is ready")</span></label></li>
+      </ul>
+      <div class="check"><b>01:00 checkpoint · whole team</b>Approve a Blueprint and get a running marketplace, with no hand-fixing.</div>
+    </div></div>
+    <div class="block" data-from="1500" data-to="1680"><div class="time">01:00–04:00</div><div class="body">
+      <h3>Fix loop and reliability</h3>
+      <div class="kind"><span>AI</span><span>server</span></div>
+      <ul class="tasks">
+        <li><label><input type="checkbox" id="p2-11"><span>Failed test → new fix task for the agent that owns that code, with the error attached (1 retry); show it on the board</span></label></li>
+        <li><label><input type="checkbox" id="p2-12"><span>Run the full build 5+ times; fix the most common failures in the runner and planner</span></label></li>
+      </ul>
+    </div></div>
+    <div class="block" data-from="1680" data-to="1770"><div class="time">04:00–05:30</div><div class="body"><p class="together">Feature freeze. Run the full demo 3 times with the team. Fix crashes only.</p></div></div>
+    <div class="block" data-from="1770" data-to="1860"><div class="time">05:30–07:00</div><div class="body"><p class="together">Explain the agent team in the pitch. Sleep in turns.</p></div></div>
+  </div>
+</section>
+
+<!-- Person 3 -->
+<section class="lane c" id="p3">
+  <div class="lane-head">
+    <span class="who">Person 3</span>
+    <h2>Code writers &amp; sandbox</h2>
+    <p>Owns the agents that write the marketplace, the starter app they build on, and the place it runs.</p>
+    <div class="owns"><code>templates/marketplace</code><code>lib/agents/backend.ts</code><code>lib/agents/frontend.ts</code><code>lib/sandbox.ts</code><code>preview panel</code></div>
     <span class="progress" data-progress></span>
   </div>
   <div>
     <div class="block" data-from="960" data-to="1020"><div class="time">16:00–17:00</div><div class="body">
       <h3>Starter app</h3>
+      <div class="kind"><span>server</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="c1"><span><code>templates/marketplace</code>: Express + SQLite (<code>better-sqlite3</code>) + plain HTML in <code>public/</code></span></label></li>
-        <li><label><input type="checkbox" id="c2"><span>Simple login, one listings page, seed data; runs on the port in <code>PORT</code></span></label></li>
-        <li><label><input type="checkbox" id="c3"><span>Install packages once now, so nothing installs during the demo</span></label></li>
+        <li><label><input type="checkbox" id="p3-1"><span><code>templates/marketplace</code>: Express + SQLite (<code>better-sqlite3</code>) + plain HTML in <code>public/</code></span></label></li>
+        <li><label><input type="checkbox" id="p3-2"><span>Simple login, one listings page, seed data; runs on the port in <code>PORT</code></span></label></li>
+        <li><label><input type="checkbox" id="p3-3"><span>Install packages once now, so nothing installs during the demo</span></label></li>
       </ul>
     </div></div>
     <div class="block" data-from="1020" data-to="1260"><div class="time">17:00–21:00</div><div class="body">
-      <h3>Sandbox and edge-case tests</h3>
+      <h3>Code-writing agents and sandbox</h3>
+      <div class="kind"><span>AI</span><span>server</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="c4"><span><code>createWorkspace(id)</code> copies the template into <code>workspaces/&lt;id&gt;/</code> (link <code>node_modules</code>, don't copy it)</span></label></li>
-        <li><label><input type="checkbox" id="c5"><span><code>writeFiles</code>, <code>startApp</code> (free port, returns URL), <code>stopApp</code>, <code>runTests</code> (returns pass/fail per test)</span></label></li>
-        <li><label><input type="checkbox" id="c6"><span>~10 HTTP tests: double-buy of the last item, negative price, editing someone else's listing, empty fields, huge title, ordering while logged out, duplicate payment confirmation, emoji in search, refund twice, page out of range</span></label></li>
+        <li><label><input type="checkbox" id="p3-4"><span>Backend agent: Express routes + SQLite tables, extending the template</span></label></li>
+        <li><label><input type="checkbox" id="p3-5"><span>Frontend agent: HTML pages that call the API</span></label></li>
+        <li><label><input type="checkbox" id="p3-6"><span>Both return <code>{ files, note }</code>; test them against <code>lib/sample-blueprint.json</code></span></label></li>
+        <li><label><input type="checkbox" id="p3-7"><span><code>sandbox.ts</code>: <code>createWorkspace</code> (link <code>node_modules</code>, don't copy it), <code>writeFiles</code>, <code>startApp</code> (free port, returns URL), <code>stopApp</code></span></label></li>
       </ul>
-      <div class="check"><b>21:00 checkpoint</b>From code: create a workspace, start the app, run the tests and get pass/fail results as JSON.</div>
+      <div class="check"><b>21:00 checkpoint</b>Backend agent code, written into a workspace, starts and answers a request.</div>
     </div></div>
     <div class="block" data-from="1260" data-to="1290"><div class="time">21:00–21:30</div><div class="body"><p class="together">Sync with the team, eat, merge.</p></div></div>
     <div class="block" data-from="1290" data-to="1500"><div class="time">21:30–01:00</div><div class="body">
-      <h3>Connect to the runner</h3>
+      <h3>Tests and preview</h3>
+      <div class="kind"><span>server</span><span>UI</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="c7"><span>Runner calls the sandbox after each task; send <code>test</code> and <code>preview</code> events</span></label></li>
-        <li><label><input type="checkbox" id="c8"><span>Stop old app processes so ports don't run out after many builds</span></label></li>
+        <li><label><input type="checkbox" id="p3-8"><span><code>runTests</code>: runs Person 1's edge-case tests against the workspace and returns pass/fail per test</span></label></li>
+        <li><label><input type="checkbox" id="p3-9"><span>Preview panel on <code>/build</code>: link to the running app plus the list of generated files</span></label></li>
+        <li><label><input type="checkbox" id="p3-10"><span>Stop old app processes so ports don't run out after many builds</span></label></li>
       </ul>
       <div class="check"><b>01:00 checkpoint · whole team</b>Approve a Blueprint and get a running marketplace, with no hand-fixing.</div>
     </div></div>
     <div class="block" data-from="1500" data-to="1680"><div class="time">01:00–04:00</div><div class="body">
-      <h3>Demo moment and stretch</h3>
+      <h3>Code quality and stretch</h3>
+      <div class="kind"><span>AI</span><span>server</span></div>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="c9"><span>Make sure the double-buy test reliably catches a purchase that isn't wrapped in a database transaction</span></label></li>
-        <li><label><input type="checkbox" id="c10"><span>Stretch: one-command deploy of a generated app (Render or Railway)</span></label></li>
+        <li><label><input type="checkbox" id="p3-11"><span>Tune the backend and frontend prompts on the code that broke most often</span></label></li>
+        <li><label><input type="checkbox" id="p3-12"><span>Stretch: one-command deploy of a generated app (Render or Railway)</span></label></li>
       </ul>
     </div></div>
     <div class="block" data-from="1680" data-to="1770"><div class="time">04:00–05:30</div><div class="body">
       <h3>Backup</h3>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="c11"><span>Record the best full demo run as a backup video in case Wi-Fi or Groq fails on stage</span></label></li>
+        <li><label><input type="checkbox" id="p3-13"><span>Record the best full demo run as a backup video in case Wi-Fi or Groq fails on stage</span></label></li>
       </ul>
     </div></div>
     <div class="block" data-from="1770" data-to="1860"><div class="time">05:30–07:00</div><div class="body">
       <h3>Submission</h3>
       <ul class="tasks">
-        <li><label><input type="checkbox" id="c12"><span>README with setup steps and screenshots; pitch slides; make the repo public if the rules require it</span></label></li>
+        <li><label><input type="checkbox" id="p3-14"><span>README with setup steps and screenshots; pitch slides; make the repo public if the rules require it</span></label></li>
       </ul>
     </div></div>
   </div>
@@ -322,10 +368,19 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
   <h2>Shared rules</h2>
   <div class="grid2">
     <div class="panel">
+      <h3>Hand-offs (don't be late on these)</h3>
+      <ul>
+        <li><b>16:45</b> Person 1 pushes the Next.js scaffold, types and sample Blueprint</li>
+        <li><b>17:00</b> Person 2 pushes the Groq wrapper</li>
+        <li><b>21:30</b> Person 3's agents and Person 1's tests plug into Person 2's runner</li>
+        <li>Until a hand-off lands, use a fake version and keep going</li>
+      </ul>
+    </div>
+    <div class="panel">
       <h3>Working together</h3>
       <ul>
         <li>Agree on the types in <code>lib/types.ts</code> by 17:00, then don't change them without telling the others</li>
-        <li>Push small commits often; each person works in their own folders</li>
+        <li>Push small commits often; each person works in their own files</li>
         <li>Blocked for more than 20 minutes? Say so in the group chat</li>
       </ul>
     </div>
@@ -346,25 +401,27 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
         <li>Never cut Discovery or the Blueprint</li>
       </ol>
     </div>
-    <div class="panel">
-      <h3>Demo script (3 minutes)</h3>
-      <ol>
-        <li>"A marketplace for second-hand textbooks." Answer as non-technical</li>
-        <li>Show a simple question with a recommended option; Blueprint fills in</li>
-        <li>Approve; agents leave each other notes on the task board</li>
-        <li>QA catches the double-buy bug, backend fixes it, test turns green</li>
-        <li>Open the marketplace and buy a book</li>
-      </ol>
-    </div>
+  </div>
+  <div class="panel">
+    <h3>Demo script (3 minutes)</h3>
+    <ol>
+      <li>"A marketplace for second-hand textbooks." Answer as non-technical</li>
+      <li>Show a simple question with a recommended option; the Blueprint fills in</li>
+      <li>Approve; agents leave each other notes on the task board</li>
+      <li>QA catches the double-buy bug, backend fixes it, the test turns green</li>
+      <li>Open the marketplace and buy a book</li>
+    </ol>
   </div>
 </section>
 
-<footer>Your checkboxes are saved only in your own browser. Link straight to your part by adding <code>#deva</code>, <code>#devb</code> or <code>#devc</code> to the page link.</footer>
+<footer>Your checkboxes are saved only in your own browser. Link straight to your part by adding <code>#p1</code>, <code>#p2</code> or <code>#p3</code> to the page link.</footer>
 
 </div>
 
 <script>
 (function () {
+  var PEOPLE = ["p1", "p2", "p3"];
+
   // Minutes since 16:00 tonight, in the viewer's local time; null outside the 16:00–07:00 window
   function nightMinute() {
     var d = new Date();
@@ -399,17 +456,17 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
   buttons.forEach(function (btn) {
     btn.addEventListener("click", function () {
       show(btn.dataset.show);
-      try { localStorage.setItem("vision-view", btn.dataset.show); } catch (e) {}
+      try { localStorage.setItem("vision-view-v2", btn.dataset.show); } catch (e) {}
     });
   });
   var hash = location.hash.replace("#", "");
-  var start = ["deva", "devb", "devc"].indexOf(hash) >= 0 ? hash : null;
-  if (!start) { try { start = localStorage.getItem("vision-view"); } catch (e) {} }
-  show(start && ["all", "deva", "devb", "devc"].indexOf(start) >= 0 ? start : "all");
+  var start = PEOPLE.indexOf(hash) >= 0 ? hash : null;
+  if (!start) { try { start = localStorage.getItem("vision-view-v2"); } catch (e) {} }
+  show(start && (start === "all" || PEOPLE.indexOf(start) >= 0) ? start : "all");
 
   // Checkboxes and progress, saved per viewer
   var saved = {};
-  try { saved = JSON.parse(localStorage.getItem("vision-checks") || "{}"); } catch (e) {}
+  try { saved = JSON.parse(localStorage.getItem("vision-checks-v2") || "{}"); } catch (e) {}
   function updateProgress() {
     lanes.forEach(function (l) {
       var boxes = l.querySelectorAll(".tasks input");
@@ -421,7 +478,7 @@ footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--li
     if (saved[box.id]) box.checked = true;
     box.addEventListener("change", function () {
       saved[box.id] = box.checked;
-      try { localStorage.setItem("vision-checks", JSON.stringify(saved)); } catch (e) {}
+      try { localStorage.setItem("vision-checks-v2", JSON.stringify(saved)); } catch (e) {}
       updateProgress();
     });
   });
