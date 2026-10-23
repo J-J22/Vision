@@ -3,7 +3,7 @@
 // POST { action: "save-key", provider, key } | { action: "remove-key", provider } | { action: "choose", slot, part }
 import { NextResponse } from "next/server";
 import { tokensUsed } from "@/lib/activity";
-import { fetchModels, forgetModels, isProvider, modelsFor, PROVIDER_IDS, PROVIDERS, providerStatus } from "@/lib/providers";
+import { checkKey, fetchModels, forgetModels, isProvider, modelsFor, PROVIDER_IDS, PROVIDERS, providerStatus } from "@/lib/providers";
 import { chainFor, isSlot, parsePart, partId, ratingOf, readChoices, recommended, setChoice, SLOTS, verdict } from "@/lib/slots";
 import { removeKey, saveKey } from "@/lib/vault";
 
@@ -73,8 +73,8 @@ export async function POST(req: Request) {
       if (action === "save-key") {
         const key = String(body.key ?? "").trim();
         if (key.length < 10) throw new Error("That doesn't look like a full API key.");
-        // Check the key with the provider before storing it
-        await fetchModels(provider, key);
+        // Check the key with the provider before storing it: list its models, then get a real 1-token reply
+        await checkKey(provider, key, await fetchModels(provider, key));
         saveKey(provider, key);
       } else {
         removeKey(provider);

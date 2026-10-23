@@ -108,13 +108,47 @@ export async function fetchModels(id: ProviderId, key: string): Promise<ModelInf
     signal: AbortSignal.timeout(15_000),
   });
   if (res.status === 401 || res.status === 403) throw new Error(`${PROVIDERS[id].name} rejected this key (HTTP ${res.status}). Check that you copied all of it.`);
-  if (!res.ok) throw new Error(`${PROVIDERS[id].name} answered HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) {
+    const text = await res.text();
+    // Gemini answers a bad key with 400 "Please pass a valid API key"
+    if (/api[ _-]?key/i.test(text)) throw new Error(`${PROVIDERS[id].name} rejected this key. Check that you copied all of it.`);
+    throw new Error(`${PROVIDERS[id].name} answered HTTP ${res.status}: ${text.slice(0, 200)}`);
+  }
   const data = (await res.json()) as { data?: { id: string; context_window?: number; context_length?: number }[] };
   return (data.data ?? [])
     // Gemini lists models as "models/gemini-…"; its chat endpoint takes the bare name
     .map((m) => ({ id: m.id.replace(/^models\//, ""), context: m.context_window ?? m.context_length }))
     .filter((m) => !NOT_CHAT.test(m.id))
     .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
+}
+
+// Proves a key really works by asking for a 1-token reply. Listing models isn't enough: NVIDIA's list is public
+// and answers 200 to any key. Small models are tried first; retired ones (404/410, sent before the key is checked)
+// are skipped. Throws with a readable message unless the provider accepted the key.
+export async function checkKey(id: ProviderId, key: string, models: ModelInfo[]): Promise<void> {
+  const name = PROVIDERS[id].name;
+  const small = /(instant|flash|[-/]mini|small|tiny|\b[1-9]b\b|-[1-9]b)/i;
+  const candidates = [...models.filter((m) => small.test(m.id)), ...models.filter((m) => !small.test(m.id))].slice(0, 4);
+  if (!candidates.length) throw new Error(`${name} accepted the key but offers no chat models to it.`);
+  let last = "";
+  for (const m of candidates) {
+    const res = await fetch(`${PROVIDERS[id].baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: m.id, messages: [{ role: "user", content: "hi" }], max_tokens: 1 }),
+      signal: AbortSignal.timeout(20_000),
+    }).catch((err) => {
+      last = err instanceof Error ? err.message : String(err);
+      return null;
+    });
+    if (!res) continue;
+    const text = await res.text();
+    // 429 means the key is real, just busy right now
+    if (res.ok || res.status === 429) return;
+    if (res.status === 401 || res.status === 403 || /api[ _-]?key/i.test(text)) throw new Error(`${name} rejected this key (HTTP ${res.status}). Check that you copied all of it.`);
+    last = `HTTP ${res.status}: ${text.slice(0, 150)}`;
+  }
+  throw new Error(`Couldn't confirm this ${name} key (${last}). Try again in a minute.`);
 }
 
 // Cached model list for a provider; refreshed daily or when the key changes. Empty if there's no key.
