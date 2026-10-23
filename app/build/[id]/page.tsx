@@ -90,10 +90,19 @@ export default function BuildPage({ params }: { params: Promise<{ id: string }> 
         <h1>Build {id === "sample" ? "" : id}</h1>
         <span className={`chip ${status.status === "done" ? "good" : status.status === "failed" ? "bad" : "warn"}`}>{STATUS_LABEL[status.status] ?? status.status}</span>
         {status.detail && <span className="muted small">{status.detail}</span>}
-        {preview && (
-          <a className="btn" href={preview} target="_blank" rel="noreferrer" style={{ marginLeft: "auto" }}>
-            Open the app
-          </a>
+        {(preview || status.status === "done") && (
+          <span className="row" style={{ marginLeft: "auto", gap: 8 }}>
+            {preview && (
+              <a className="btn" href={preview} target="_blank" rel="noreferrer">
+                Open the app
+              </a>
+            )}
+            {status.status === "done" && id !== "sample" && (
+              <a className="btn ghost" href={`/api/build/${id}/download`} download>
+                Download code (.zip)
+              </a>
+            )}
+          </span>
         )}
       </div>
       {error && <p className="error">{error}</p>}
