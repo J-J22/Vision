@@ -1,7 +1,6 @@
 // The chair merges the members' reviews into a short list of questions; the translator words them for the user.
 import { z } from "zod";
 import { callLLM } from "../llm";
-import { config } from "../config";
 import type { Level, MemberReview, UserQuestion } from "../types";
 
 const ChairSchema = z.object({
@@ -16,7 +15,7 @@ export type ChairResult = z.infer<typeof ChairSchema>;
 export async function chair(reviews: MemberReview[], asked: { question: string; answer: string }[], maxQuestions: number): Promise<ChairResult> {
   return callLLM({
     label: "parliament chair",
-    model: config.models.big,
+    slot: "head",
     schema: ChairSchema,
     system: `You chair a review panel for a web app plan. Members raised the concerns below.
 1. Merge duplicates. Drop anything already answered.
@@ -61,7 +60,7 @@ export async function translate(
   if (!questions.length) return [];
   const result = await callLLM({
     label: "parliament translator",
-    model: config.models.small,
+    slot: "translator",
     schema: TranslatedSchema,
     temperature: 0.4,
     system: `Rewrite each question for this user. ${LEVEL_GUIDE[level]}

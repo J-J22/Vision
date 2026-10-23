@@ -112,7 +112,8 @@ function say(p: Project, msg: Omit<ChatMessage, "id" | "at">) {
 
 // ---------- create ----------
 
-export function createProject(origin: string): Project {
+// `idea` comes from the landing page's input; when given, the interview starts from it
+export function createProject(origin: string, idea = ""): Project {
   const p: Project = {
     id: randomUUID().replace(/-/g, "").slice(0, 8),
     stage: "discovery",
@@ -128,6 +129,12 @@ export function createProject(origin: string): Project {
     minutes: { decisions: [], defaults: [], disagreements: [] },
     origin,
   };
+  if (idea) {
+    p.facts.idea = idea.slice(0, 1000);
+    say(p, { from: "user", text: p.facts.idea });
+    say(p, { from: "vision", text: "Got it. I'll plan this with you, and a council of AIs will check the plan before anything gets built." });
+  }
+  // The opening question's text must stay exactly OPENING.text: the interview recognises answers by it
   say(p, { from: "vision", text: OPENING.text, options: OPENING.options.map((label) => ({ label })) });
   projects.set(p.id, p);
   changed(p);

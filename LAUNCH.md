@@ -11,16 +11,12 @@
    ```
    npm run setup
    ```
-3. **Create your settings file:**
-   - Windows: `copy .env.example .env.local`
-   - Mac/Linux: `cp .env.example .env.local`
-4. **Add a Groq key:** open it with `notepad .env.local` (Windows) or any editor, and fill in the first line:
-   ```
-   GROQ_API_KEY=gsk_your_key_here
-   ```
-   Best: make **your own free key** at https://console.groq.com/keys. Each key has its own limit
-   (8,000 tokens per minute per model), so the team won't slow each other down.
-   No key yet? Set `VISION_FAKE_AGENTS=1` instead to try the build screen without AI.
+3. **Keys:** you can plug them in on the website after step 6 (**AI parts** page, stored encrypted), or put them in a file:
+   - Windows: `copy .env.example .env.local`, Mac/Linux: `cp .env.example .env.local`, then fill in any keys you have.
+   Free keys: Groq (https://console.groq.com/keys), Gemini (https://aistudio.google.com/apikey),
+   NVIDIA (https://build.nvidia.com), Mistral (https://console.mistral.ai/api-keys).
+   Make **your own** keys: each has its own limits, so the team won't slow each other down.
+4. No key yet? Set `VISION_FAKE_AGENTS=1` in `.env.local` to try the build screen without AI.
 5. **Check your PC:**
    ```
    npm run doctor
@@ -30,7 +26,7 @@
    ```
    npm run dev
    ```
-   Open **http://localhost:3000/discovery** in your browser.
+   Open **http://localhost:3000** in your browser. **http://localhost:3000/parts** is where you plug in keys and choose which AI runs each step.
 
 ## Every time after that
 

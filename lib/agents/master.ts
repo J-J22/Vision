@@ -1,7 +1,6 @@
 // The master prompt: the one document the build team works from.
 // It describes the app and gives every agent its job, written from the Blueprint and the council's outcome.
 import { callText } from "../llm";
-import { config } from "../config";
 import type { Blueprint, Minutes } from "../types";
 
 export const AGENT_JOBS = ["Architect", "Backend developer", "Frontend developer", "Designer", "QA tester", "Debugger"] as const;
@@ -42,7 +41,7 @@ Anything the council disagreed on.`;
 export async function writeMasterPrompt(blueprint: Blueprint, minutes: Minutes, consensus: string[], asked: { question: string; answer: string }[]) {
   return callText({
     label: "master prompt",
-    model: config.models.big,
+    slot: "master",
     maxTokens: 3500,
     temperature: 0.3,
     messages: [

@@ -1,7 +1,6 @@
 // Parliament members: each reviews the Blueprint from one angle, using a different model.
 import { z } from "zod";
 import { callLLM } from "../llm";
-import { config } from "../config";
 import { AREAS, ConcernSchema, type Blueprint, type MemberReview, type MemberRole } from "../types";
 
 export const MEMBERS: { role: MemberRole; title: string; focus: string }[] = [
@@ -42,7 +41,7 @@ export async function review(
   try {
     const result = await callLLM({
       label: `parliament ${member.role}`,
-      model,
+      slot: model,
       schema: ReviewSchema,
       temperature: 0.5,
       maxTokens: 2048,
@@ -66,7 +65,7 @@ Return {"summary": "...", "concerns": [{"area": "payments", "question": "...", "
   }
 }
 
-export function memberModel(index: number) {
-  const list = config.models.parliament;
-  return list[index % list.length];
+// Every member runs in the backup panel slot; the slot spreads the calls across its parts
+export function memberModel(_index: number) {
+  return "panel";
 }

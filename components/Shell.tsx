@@ -47,10 +47,14 @@ export function Shell({ project, page, children }: { project: ProjectView | null
               </span>
             );
           })}
+          <span className="label" style={{ marginTop: 14 }}>// Assembly</span>
+          <Link href="/parts" className={page === "parts" ? "active" : ""}>
+            <span><span className="tag">[PART]</span>AI parts</span>
+          </Link>
         </nav>
         <div className="foot stack" style={{ gap: 6 }}>
           <span className="label">Models</span>
-          <span className="small muted">Groq · gpt-oss-120b · gpt-oss-20b · qwen3.8</span>
+          <Link href="/parts" className="small">Choose which AI runs each step →</Link>
         </div>
       </aside>
       <div className="main">

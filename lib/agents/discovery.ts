@@ -1,7 +1,6 @@
 // Discovery: learn who the user is, draft a Blueprint from their idea, and fold their answers back in.
 import { z } from "zod";
 import { callLLM } from "../llm";
-import { config } from "../config";
 import { BlueprintSchema, type Blueprint, type Level, type Profile } from "../types";
 
 // Fixed questions: no model call needed, so the first screen is instant
@@ -51,7 +50,7 @@ const BLUEPRINT_SHAPE = `Blueprint JSON shape:
 export async function draftBlueprint(idea: string, profile: Profile): Promise<Blueprint> {
   const result = await callLLM({
     label: "discovery draft",
-    model: config.models.big,
+    slot: "draft",
     schema: BlueprintSchema,
     system: `You are a senior product engineer. Turn a user's app idea into a first draft Blueprint for a web app.
 Fill in only what the idea states or clearly implies. Leave fields empty when you'd be guessing about something
@@ -76,8 +75,7 @@ export async function applyAnswers(
 ): Promise<{ blueprint: Blueprint; decisions: string[] }> {
   return callLLM({
     label: "discovery merge",
-    // The big model is busy with the council's conclusion and the master prompt; this one is idle by now
-    model: config.models.parliament[1],
+    slot: "merge",
     schema: MergeSchema,
     system: `You maintain a Blueprint for a web app. Update it with the user's answers and the review panel's defaults.
 Change only what the answers and defaults affect, and keep everything else. Add entities, endpoints and pages that new

@@ -1,16 +1,20 @@
-// Groq wrapper: every model call in Vision goes through callLLM.
-// - asks for JSON and validates it against a zod schema
-// - on invalid output, retries once with the validation error
-// - paces calls to stay under each model's tokens-per-minute limit
-// - on 429 (rate limit) or 5xx, waits as long as Groq asks and retries
+// Every model call in Vision goes through callLLM / callText, addressed to a slot (an AI position, see lib/slots.ts).
+// - the slot's chain lists the parts that may serve it; the first one free right now takes the call,
+//   so work spreads across providers instead of queueing on one
+// - paces calls under each provider's free-tier limits (tokens and requests per minute)
+// - on a rate limit, daily limit, bad key, missing model or network error, moves on to the next part
+// - asks for JSON, validates it against a zod schema, and retries once with the validation error
 // - caps how many calls run at once (LLM_CONCURRENCY)
 import { z } from "zod";
 import { config } from "./config";
+import { report } from "./activity";
+import { PROVIDERS, providerKey } from "./providers";
+import { chainFor, partId, type Part } from "./slots";
 
 export type Message = { role: "system" | "user" | "assistant"; content: string };
 
 type CallOptions<T extends z.ZodTypeAny> = {
-  model: string;
+  slot: string;
   system: string;
   messages: Message[];
   schema: T;
@@ -18,6 +22,8 @@ type CallOptions<T extends z.ZodTypeAny> = {
   maxTokens?: number;
   label?: string; // shows up in logs
 };
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- concurrency limit ----------
 
@@ -38,36 +44,65 @@ function release() {
   queue.shift()?.();
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-// ---------- tokens-per-minute pacing ----------
+// ---------- per-minute pacing ----------
 
 // Rough count: about 3.5 characters per token for English and code
 export const estimateTokens = (text: string) => Math.ceil(text.length / 3.5);
 
-const g = globalThis as unknown as { __visionTokenLog?: Map<string, { at: number; tokens: number }[]> };
-const tokenLog: Map<string, { at: number; tokens: number }[]> = (g.__visionTokenLog ??= new Map());
+type Booking = { at: number; tokens: number };
+const g = globalThis as unknown as {
+  __visionUsage?: Map<string, Booking[]>;
+  __visionOut?: Map<string, number>; // part → when it's usable again after a daily limit
+  __visionBadKey?: Map<string, number>; // provider → until
+  __visionMissing?: Set<string>; // parts whose model doesn't exist
+};
+const usage: Map<string, Booking[]> = (g.__visionUsage ??= new Map());
+const outForTheDay: Map<string, number> = (g.__visionOut ??= new Map());
+const badKey: Map<string, number> = (g.__visionBadKey ??= new Map());
+const missing: Set<string> = (g.__visionMissing ??= new Set());
 
-function usedLastMinute(model: string) {
+// Groq limits each model separately; the other providers limit the whole account
+const scope = (p: Part) => (PROVIDERS[p.provider].limitScope === "model" ? partId(p) : p.provider);
+
+function recent(p: Part): Booking[] {
   const cutoff = Date.now() - 60_000;
-  const log = (tokenLog.get(model) ?? []).filter((e) => e.at > cutoff);
-  tokenLog.set(model, log);
-  return log.reduce((sum, e) => sum + e.tokens, 0);
+  const log = (usage.get(scope(p)) ?? []).filter((b) => b.at > cutoff);
+  usage.set(scope(p), log);
+  return log;
 }
 
-// Waits until this request fits in the model's per-minute budget, then books it.
-// Returns the booking so the caller can correct it to what Groq actually counted.
-async function reserve(model: string, tokens: number) {
-  while (usedLastMinute(model) + tokens > config.tokensPerMinute) {
-    const oldest = tokenLog.get(model)?.[0];
-    await sleep(oldest ? Math.max(500, oldest.at + 60_000 - Date.now() + 250) : 1000);
+// How long until this request fits the part's per-minute limits (0 = now)
+function waitFor(p: Part, tokens: number): number {
+  const { tokensPerMinute: tpm, requestsPerMinute: rpm } = PROVIDERS[p.provider];
+  const log = recent(p);
+  let wait = 0;
+  if (tpm) {
+    let used = log.reduce((sum, b) => sum + b.tokens, 0);
+    for (const b of log) {
+      if (used + tokens <= tpm) break;
+      used -= b.tokens;
+      wait = Math.max(wait, b.at + 60_000 - Date.now() + 250);
+    }
   }
-  const booking = { at: Date.now(), tokens };
-  tokenLog.get(model)!.push(booking);
-  return booking;
+  if (rpm && log.length >= rpm) wait = Math.max(wait, log[log.length - rpm].at + 60_000 - Date.now() + 250);
+  return Math.max(0, wait);
 }
 
-// Groq sends waits like "7.66s", "1m2.5s" or "120ms"
+function book(p: Part, tokens: number): Booking {
+  const b = { at: Date.now(), tokens };
+  recent(p).push(b);
+  return b;
+}
+
+// Groq rejects any request whose prompt + max output is bigger than its per-minute limit; returns null if it can't fit
+function outputBudget(p: Part, promptTokens: number, wanted: number): number | null {
+  const tpm = PROVIDERS[p.provider].tokensPerMinute;
+  if (!tpm) return wanted;
+  const room = tpm - promptTokens - 200;
+  return room < 600 ? null : Math.min(wanted, room);
+}
+
+// Providers send waits like "7.66s", "1m2.5s" or "120ms"
 function parseWait(value: string | null): number | null {
   if (!value) return null;
   if (/^\d+(\.\d+)?$/.test(value)) return Number(value) * 1000;
@@ -78,103 +113,140 @@ function parseWait(value: string | null): number | null {
   return ms || null;
 }
 
-// ---------- raw call ----------
+// ---------- one call, served by the first part that can take it ----------
 
-// ---------- daily limits: switch models instead of waiting ----------
+async function chat(route: string, label: string, messages: Message[], wanted: number, temperature: number, json: boolean): Promise<string> {
+  const chain = await chainFor(route);
+  if (!chain.length) {
+    throw new Error(`No AI is plugged into "${route}" yet. Open the AI parts page and add a key for at least one provider.`);
+  }
+  const promptTokens = estimateTokens(messages.map((m) => m.content).join("\n"));
+  const cooldown = new Map<string, number>(); // part → not before, for this call
+  const skip = new Set<string>(); // parts that failed this request in a way a retry won't fix
+  const netFails = new Map<string, number>();
+  let lastError = "";
+  let lastPart = "";
+  const started = Date.now();
 
-// Models that used up their daily allowance, and when they're usable again
-const gd = globalThis as unknown as { __visionExhausted?: Map<string, number> };
-const exhausted: Map<string, number> = (gd.__visionExhausted ??= new Map());
+  for (let failures = 0; failures < 12 && Date.now() - started < 8 * 60_000; ) {
+    const now = Date.now();
+    const usable = chain.filter(
+      (p) => !skip.has(partId(p)) && !missing.has(partId(p)) && (outForTheDay.get(partId(p)) ?? 0) < now && (badKey.get(p.provider) ?? 0) < now && outputBudget(p, promptTokens, wanted) !== null,
+    );
+    if (!usable.length) {
+      throw new Error(
+        lastError
+          ? `Every AI plugged into "${route}" failed. Last error: ${lastError}`
+          : `No AI plugged into "${route}" can take a request this big (about ${promptTokens} tokens). Add Gemini, NVIDIA or Mistral on the AI parts page: they have no per-minute token cap.`,
+      );
+    }
 
-// The model to use instead of `model` while it's out for the day: the first available one in the fallback order
-function available(model: string): string {
-  const until = exhausted.get(model);
-  if (!until || until < Date.now()) return model;
-  const next = config.fallbackOrder.find((m) => m !== model && (exhausted.get(m) ?? 0) < Date.now());
-  if (!next) throw new Error("Every Groq model has used up its daily allowance. Wait until they reset, use another person's own Groq key, or upgrade the Groq plan.");
-  return next;
-}
+    // The first part that's free right now, otherwise the one free soonest
+    let part = usable[0];
+    let bestWait = Infinity;
+    for (const p of usable) {
+      const maxTokens = outputBudget(p, promptTokens, wanted)!;
+      const w = Math.max((cooldown.get(partId(p)) ?? 0) - now, waitFor(p, promptTokens + maxTokens));
+      if (w < bestWait) {
+        part = p;
+        bestWait = w;
+      }
+      if (w <= 0) break;
+    }
+    if (bestWait > 0) {
+      await sleep(Math.min(bestWait, 60_000));
+      continue;
+    }
 
-async function chat(requested: string, messages: Message[], temperature: number, maxTokens: number, json = true): Promise<string> {
-  if (!config.groqKey) throw new Error("GROQ_API_KEY is not set. Copy .env.example to .env.local and add your key.");
+    const id = partId(part);
+    if (lastPart && lastPart !== id) report({ slot: route, part: id, event: "switch", detail: `from ${lastPart}` });
+    lastPart = id;
+    const provider = PROVIDERS[part.provider];
+    const maxTokens = outputBudget(part, promptTokens, wanted)!;
+    const booking = book(part, promptTokens + maxTokens);
+    report({ slot: route, part: id, event: "start" });
+    const callStart = Date.now();
 
-  let model = available(requested);
-  if (model !== requested) console.warn(`[llm] ${requested} is out of daily tokens, using ${model}`);
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const booking = await reserve(model, estimateTokens(messages.map((m) => m.content).join("\n")) + maxTokens);
     let res: Response;
     try {
-      res = await fetch(`${config.groqBaseUrl}/chat/completions`, {
+      res = await fetch(`${provider.baseUrl}/chat/completions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.groqKey}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${providerKey(part.provider)}` },
         body: JSON.stringify({
-          model,
+          model: part.model,
           messages,
           temperature,
           max_tokens: maxTokens,
           ...(json ? { response_format: { type: "json_object" } } : {}),
-          // gpt-oss models reason before answering, and the reasoning counts against max_tokens and the
-          // per-minute limit; "low" keeps it short (these are structured, well-specified jobs)
-          ...(model.startsWith("openai/gpt-oss") ? { reasoning_effort: config.reasoningEffort } : {}),
+          // gpt-oss models reason before answering, and that counts against max_tokens; "low" keeps it short
+          ...(part.provider === "groq" && part.model.startsWith("openai/gpt-oss") ? { reasoning_effort: config.reasoningEffort } : {}),
         }),
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(150_000),
       });
     } catch (err) {
-      // Dropped Wi-Fi, DNS hiccup or a stalled connection: nothing reached Groq, so free the booking, wait and retry
+      // Dropped Wi-Fi, DNS hiccup or a stalled connection: nothing was used
       booking.tokens = 0;
-      const wait = 1500 * 2 ** attempt;
-      console.warn(`[llm] ${model} network error (${(err as Error & { cause?: { code?: string } }).cause?.code ?? (err as Error).name}), retrying in ${wait}ms`);
-      await sleep(Math.min(wait, 30_000));
+      const n = (netFails.get(id) ?? 0) + 1;
+      netFails.set(id, n);
+      cooldown.set(id, Date.now() + Math.min(1500 * 2 ** n, 30_000));
+      lastError = `${provider.name} network error (${(err as Error & { cause?: { code?: string } }).cause?.code ?? (err as Error).name})`;
+      console.warn(`[llm] ${label}: ${lastError}`);
+      failures++;
       continue;
     }
 
-    if (res.status === 429) {
-      // A daily limit (tokens or requests per day) won't clear for minutes or hours: switch models now
-      const body = await res.clone().text();
-      if (/per day|\(TPD\)|\(RPD\)/i.test(body)) {
-        booking.tokens = 0;
-        const wait = parseWait(res.headers.get("retry-after")) ?? 3_600_000;
-        exhausted.set(model, Date.now() + wait);
-        const next = available(model);
-        console.warn(`[llm] ${model} hit its daily limit (back in ~${Math.round(wait / 60000)} min), switching to ${next}`);
-        model = next;
-        continue;
-      }
-    }
-    if (res.status === 429 || res.status >= 500) {
-      const wait =
-        parseWait(res.headers.get("retry-after")) ??
-        parseWait(res.headers.get("x-ratelimit-reset-tokens")) ??
-        1000 * 2 ** attempt;
-      // Groq sometimes says "retry in 1ms"; retrying that fast just gets blocked again
-      const delay = Math.min(Math.max(wait, 2000 * (attempt + 1)), 60_000);
-      console.warn(`[llm] ${model} returned ${res.status}, retrying in ${Math.round(delay)}ms`);
-      await sleep(delay);
-      continue;
-    }
     if (!res.ok) {
       const body = await res.text();
-      // In JSON mode Groq rejects replies that aren't perfectly valid JSON; retry in plain mode,
-      // since the callers can pull JSON out of a slightly messy reply themselves
-      if (res.status === 400 && json && body.includes("json_validate_failed")) {
-        console.warn(`[llm] ${model} produced invalid JSON in JSON mode, retrying without it`);
-        booking.tokens = 0;
+      booking.tokens = 0;
+      report({ slot: route, part: id, event: "error", detail: `HTTP ${res.status}` });
+      if (res.status === 429 && /per day|\(TPD\)|\(RPD\)|daily|quota/i.test(body)) {
+        // A daily limit won't clear for hours: this part is out until it resets
+        const wait = parseWait(res.headers.get("retry-after")) ?? 3_600_000;
+        outForTheDay.set(id, Date.now() + wait);
+        lastError = `${id} used up its daily allowance`;
+        console.warn(`[llm] ${label}: ${lastError} (back in ~${Math.round(wait / 60000)} min)`);
+      } else if (res.status === 429 || res.status >= 500) {
+        const wait = parseWait(res.headers.get("retry-after")) ?? parseWait(res.headers.get("x-ratelimit-reset-tokens")) ?? 2000;
+        // Providers sometimes say "retry in 1ms"; retrying that fast just gets blocked again
+        cooldown.set(id, Date.now() + Math.min(Math.max(wait, 2000), 60_000));
+        lastError = `${id} returned ${res.status}`;
+        console.warn(`[llm] ${label}: ${lastError}, trying another part or waiting`);
+      } else if (res.status === 401 || res.status === 403) {
+        badKey.set(part.provider, Date.now() + 10 * 60_000);
+        lastError = `${provider.name} rejected the key (HTTP ${res.status})`;
+        console.warn(`[llm] ${label}: ${lastError}`);
+      } else if (res.status === 404) {
+        missing.add(id);
+        lastError = `${id} doesn't exist for this key`;
+        console.warn(`[llm] ${label}: ${lastError}`);
+      } else if (res.status === 400 && json) {
+        // JSON mode is rejected by some models, or the model produced invalid JSON in it:
+        // retry in plain mode, since callers can pull JSON out of a slightly messy reply
+        console.warn(`[llm] ${label}: ${id} rejected JSON mode, retrying without it`);
         json = false;
-        continue;
+      } else {
+        skip.add(id);
+        lastError = `${id} returned ${res.status}: ${body.slice(0, 300)}`;
+        console.warn(`[llm] ${label}: ${lastError}`);
       }
-      throw new Error(`Groq ${res.status} for model ${model}: ${body.slice(0, 500)}`);
+      failures++;
+      continue;
     }
+
     const data = await res.json();
     // The booking assumed the longest possible answer; replace it with the real count
-    if (data.usage?.total_tokens) booking.tokens = data.usage.total_tokens;
+    const total = data.usage?.total_tokens;
+    if (total) booking.tokens = total;
+    report({ slot: route, part: id, event: "done", tokens: total, ms: Date.now() - callStart });
+    console.log(`[llm] ${label} ok (${id}, ${Date.now() - callStart}ms)`);
     return data.choices?.[0]?.message?.content ?? "";
   }
-  throw new Error(`Couldn't get an answer from Groq (${model}) after several tries. Check the internet connection, or wait a minute if Groq is rate-limiting.`);
+  throw new Error(`Couldn't get an answer for "${route}" after several tries. ${lastError ? `Last error: ${lastError}.` : ""} Check the internet connection, or add another provider on the AI parts page.`);
 }
 
 // Some models wrap JSON in prose or <think> blocks; pull out the outermost object.
 function extractJson(text: string): unknown {
-  const cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+  const cleaned = text.replace(/<think>[\s\S]*?<\/think>/g, "").replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
   try {
     return JSON.parse(cleaned);
   } catch {
@@ -188,31 +260,18 @@ function extractJson(text: string): unknown {
 // ---------- public API ----------
 
 export async function callLLM<T extends z.ZodTypeAny>(opts: CallOptions<T>): Promise<z.infer<T>> {
-  const { model, system, schema, temperature = 0.3, label = "llm" } = opts;
+  const { slot, system, schema, temperature = 0.3, label = slot } = opts;
   const messages: Message[] = [
     { role: "system", content: `${system}\n\nRespond with a single JSON object only. No prose, no markdown fences.` },
     ...opts.messages,
   ];
-
-  // Groq rejects any request whose prompt + max output is bigger than the per-minute limit,
-  // so shrink the output budget to fit, and fail clearly if the prompt alone is too big
-  const promptTokens = estimateTokens(messages.map((m) => m.content).join("\n"));
-  const room = config.tokensPerMinute - promptTokens - 200;
-  if (room < 800) {
-    throw new Error(`${label}: prompt is about ${promptTokens} tokens, too big for the ${config.tokensPerMinute} tokens/minute limit. Send less context.`);
-  }
-  const maxTokens = Math.min(opts.maxTokens ?? 4096, room);
-
   await acquire();
   try {
     let lastError = "";
     for (let attempt = 0; attempt < 2; attempt++) {
-      const started = Date.now();
-      const raw = await chat(model, messages, temperature, maxTokens);
+      const raw = await chat(slot, label, messages, opts.maxTokens ?? 4096, temperature, true);
       try {
-        const parsed = schema.parse(extractJson(raw));
-        console.log(`[llm] ${label} ok (${model}, ${Date.now() - started}ms)`);
-        return parsed;
+        return schema.parse(extractJson(raw));
       } catch (err) {
         lastError = err instanceof z.ZodError ? JSON.stringify(err.issues.slice(0, 5)) : String(err);
         console.warn(`[llm] ${label} invalid output, attempt ${attempt + 1}: ${lastError.slice(0, 300)}`);
@@ -228,21 +287,16 @@ export async function callLLM<T extends z.ZodTypeAny>(opts: CallOptions<T>): Pro
   }
 }
 
-// Plain-text call with the same pacing, size limits and retries as callLLM, without schema validation.
-// Used by the debate relay, where crossexam does its own parsing.
-export async function callText(opts: { model: string; messages: Message[]; maxTokens?: number; temperature?: number; json?: boolean; label?: string }) {
-  const { model, messages, temperature = 0.4, json = false, label = "text" } = opts;
-  const promptTokens = estimateTokens(messages.map((m) => m.content).join("\n"));
-  const room = config.tokensPerMinute - promptTokens - 200;
-  if (room < 400) throw new Error(`${label}: prompt is about ${promptTokens} tokens, too big for the ${config.tokensPerMinute} tokens/minute limit`);
-  const maxTokens = Math.min(opts.maxTokens ?? 1500, room);
+// Plain-text call with the same routing, pacing and retries as callLLM, without schema validation.
+// Used by the master prompt and the debate relay, where crossexam does its own parsing.
+export async function callText(opts: { slot: string; messages: Message[]; maxTokens?: number; temperature?: number; json?: boolean; label?: string }) {
+  const { slot, messages, temperature = 0.4, json = false, label = slot } = opts;
   await acquire();
   try {
-    const started = Date.now();
-    const text = await chat(model, messages, temperature, maxTokens, json);
-    console.log(`[llm] ${label} ok (${model}, ${Date.now() - started}ms)`);
+    const text = await chat(slot, label, messages, opts.maxTokens ?? 1500, temperature, json);
     return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
   } finally {
     release();
   }
 }
+

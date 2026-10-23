@@ -1,63 +1,73 @@
 "use client";
-// Home: what Vision is, and the button that starts a project
+// Landing: the team's pixel eye hero. The input is box 1 of the flow: the user's idea starts a project
+// and goes straight to the Discovery room.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Brand } from "@/components/Shell";
-
-const PIPELINE = [
-  ["01", "Discovery room", "Vision interviews you, one question at a time, in your words"],
-  ["02", "Agent council", "Five AI reviewers debate your plan and cross-examine each other"],
-  ["03", "Your answers", "The council's questions come back to you, simply worded"],
-  ["04", "Master prompt", "One spec: the app, plus every agent's job. You approve it"],
-  ["05", "Build pipeline", "Agents build, test and fix it, then prove it works"],
-];
+import { PixelEye } from "@/components/PixelEye";
 
 export default function Home() {
   const router = useRouter();
+  const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function start() {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const idea = value.trim();
+    if (!idea || busy) return;
     setBusy(true);
     setError("");
     try {
-      const p = await (await fetch("/api/projects", { method: "POST" })).json();
+      const r = await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idea }) });
+      const p = await r.json();
+      if (!p.id) throw new Error(p.error ?? "no project");
       router.push(`/p/${p.id}/discovery`);
     } catch {
-      setError("Couldn't start a project. Is the server running?");
+      setError("Couldn't start your project. Is Vision running?");
       setBusy(false);
     }
   }
 
   return (
-    <div className="scanlines" style={{ minHeight: "100vh" }}>
-      <div style={{ borderBottom: "1px solid var(--line)", background: "var(--panel)" }}>
-        <div style={{ maxWidth: 220 }}><Brand /></div>
-      </div>
-      <section className="hero">
-        <span className="prompt-line">root@vision:~$ init-project --interactive</span>
-        <h1>Tell it what you want.<br />A council of AIs makes sure it's <em>the right thing</em>, then a team builds it.</h1>
-        <p className="muted" style={{ maxWidth: 640, fontSize: 14 }}>
-          Most AI builders start coding from whatever you typed. Vision first learns who you are, has five AI reviewers debate your plan,
-          asks you only what matters, and hands its agents one approved master prompt.
-        </p>
-        <div className="row">
-          <button className="btn" onClick={start} disabled={busy}>
-            <span className="icon">bolt</span>{busy ? "Starting…" : "Start a new project"}
+    <section className="eye-hero">
+      {/* WebGL layer */}
+      <PixelEye className="eye-layer" />
+
+      {/* CRT scanlines (pure CSS, zero GPU cost) */}
+      <div aria-hidden="true" className="eye-scan" />
+
+      {/* top bar */}
+      <header className="eye-top">
+        <h1 className="eye-badge">VISION</h1>
+        <a className="eye-btn" href="/parts">AI parts</a>
+      </header>
+
+      {/* input */}
+      <div className="eye-ask">
+        <form onSubmit={handleSubmit} className="eye-form">
+          <label htmlFor="vision-input" className="sr-only">
+            Describe the app you want to build
+          </label>
+          <input
+            id="vision-input"
+            name="vision"
+            type="text"
+            autoComplete="off"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="Describe the app you want to build"
+            disabled={busy}
+          />
+          <button type="submit" className="eye-btn" disabled={busy || !value.trim()}>
+            {busy ? "..." : "Enter"}
           </button>
-          <a className="btn ghost" href="/build/sample">Watch a sample build</a>
-        </div>
-        {error && <div className="error-box">{error}</div>}
-        <div className="pipeline">
-          {PIPELINE.map(([n, name, text]) => (
-            <div key={n}>
-              <span className="label neon">{n} //</span>
-              <h3>{name}</h3>
-              <span className="small muted">{text}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
+        </form>
+        {error ? (
+          <p className="eye-hint" style={{ color: "var(--red)" }}>{error}</p>
+        ) : (
+          <p className="eye-hint">It sees everything you do. Tell it what you want to build.</p>
+        )}
+      </div>
+    </section>
   );
 }

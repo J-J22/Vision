@@ -39,8 +39,17 @@ if (existsSync(".env.local")) {
 }
 const key = process.env.GROQ_API_KEY || env.GROQ_API_KEY || "";
 const fake = (process.env.VISION_FAKE_AGENTS || env.VISION_FAKE_AGENTS) === "1";
-report(existsSync(".env.local"), ".env.local exists", "Copy .env.example to .env.local (Windows: copy .env.example .env.local)");
-report(Boolean(key) || fake, "Groq key set", "Put GROQ_API_KEY=your-key in .env.local (get one at https://console.groq.com/keys), or set VISION_FAKE_AGENTS=1 to try the build without a key");
+// Keys can also be plugged in on the AI parts page, where they're stored encrypted in data/keys.enc.json
+const otherEnvKey = ["GEMINI_API_KEY", "NVIDIA_API_KEY", "MISTRAL_API_KEY"].some((k) => process.env[k] || env[k]);
+let dashboardKeys = [];
+try {
+  dashboardKeys = Object.keys(JSON.parse(readFileSync("data/keys.enc.json", "utf8")));
+} catch {}
+report(
+  Boolean(key) || otherEnvKey || dashboardKeys.length > 0 || fake,
+  `AI keys plugged in${dashboardKeys.length ? ` (on the AI parts page: ${dashboardKeys.join(", ")})` : ""}`,
+  "Start Vision and open http://localhost:3000/parts to plug in a free key, or put GROQ_API_KEY=your-key in .env.local (copy .env.example)",
+);
 
 if (!quick && key) {
   try {

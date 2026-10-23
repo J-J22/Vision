@@ -17,12 +17,13 @@ import { AREAS, type Blueprint, type CouncilMessage, type CouncilRound, type Cou
 
 const CROSSEXAM = join(process.cwd(), "vendor", "crossexam", "crossexam.py");
 
-export const SEATS: { seat: CouncilSeat; title: string; focus: string; model: () => string }[] = [
-  { seat: "architect", title: "Architect", focus: "data model, API endpoints, how pages get their data, scale and hosting", model: () => config.models.big },
-  { seat: "product", title: "Product lead", focus: "who the users are, what each role can do, which features belong in the first version, key user journeys", model: () => config.models.parliament[1] },
-  { seat: "security", title: "Security & payments", focus: "login, who may do what, how money moves, fraud and abuse, privacy", model: () => config.models.parliament[0] },
-  { seat: "skeptic", title: "Skeptic", focus: "contradictions, unrealistic scope, edge cases (sold out, cancellations, disputes, empty states) the others miss", model: () => config.models.parliament[3] },
-  { seat: "designer", title: "Designer", focus: "key screens, how users move between them, mobile vs desktop, the visual feel and brand", model: () => config.models.parliament[2] },
+// Each seat is an AI slot (lib/slots.ts); crossexam passes the slot id to Vision's relay as the "model"
+export const SEATS: { seat: CouncilSeat; title: string; focus: string; slot: string }[] = [
+  { seat: "architect", title: "Architect", focus: "data model, API endpoints, how pages get their data, scale and hosting", slot: "seat-architect" },
+  { seat: "product", title: "Product lead", focus: "who the users are, what each role can do, which features belong in the first version, key user journeys", slot: "seat-product" },
+  { seat: "security", title: "Security & payments", focus: "login, who may do what, how money moves, fraud and abuse, privacy", slot: "seat-security" },
+  { seat: "skeptic", title: "Skeptic", focus: "contradictions, unrealistic scope, edge cases (sold out, cancellations, disputes, empty states) the others miss", slot: "seat-skeptic" },
+  { seat: "designer", title: "Designer", focus: "key screens, how users move between them, mobile vs desktop, the visual feel and brand", slot: "seat-designer" },
 ];
 
 // ---------- Python ----------
@@ -118,7 +119,7 @@ const ConclusionSchema = z.object({
 async function conclude(synthesis: string, messages: CouncilMessage[], asked: { question: string; answer: string }[]) {
   return callLLM({
     label: "council conclusion",
-    model: config.models.big,
+    slot: "head",
     schema: ConclusionSchema,
     maxTokens: 2000,
     system: `You turn a review council's debate about an app plan into next steps.
@@ -188,7 +189,7 @@ async function runCrossexam(input: CouncilInput, state: CouncilRound): Promise<{
     "run",
     "--task",
     buildTask(input.blueprint, input.asked, input.defaults, input.round),
-    ...SEATS.flatMap((s) => ["--api", `${s.seat}=${input.relayUrl}|${s.model()}`]),
+    ...SEATS.flatMap((s) => ["--api", `${s.seat}=${input.relayUrl}|${s.slot}`]),
     "--synthesis",
     "architect",
     "--rounds",

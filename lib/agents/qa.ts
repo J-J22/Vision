@@ -25,7 +25,7 @@ export async function reviewFailures(failures: TestResult[], files: Record<strin
   try {
     return await callLLM({
       label: "qa",
-      model: config.agentModels.qa,
+      slot: "qa",
       system: SYSTEM,
       schema: QaSchema,
       messages: [

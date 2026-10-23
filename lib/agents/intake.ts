@@ -1,7 +1,6 @@
 // The interviewer: gets to know the user and their idea, one question per message.
 import { z } from "zod";
 import { callLLM } from "../llm";
-import { config } from "../config";
 import { LEVELS, type ChatMessage, type Level } from "../types";
 
 export const FactsSchema = z.object({
@@ -109,8 +108,7 @@ export async function nextIntakeTurn(chat: ChatMessage[], known: Facts): Promise
   try {
     const turn = await callLLM({
       label: "intake",
-      // Alternate models so the interview doesn't wait on one model's per-minute limit
-      model: asked % 2 ? config.models.small : config.models.parliament[1],
+      slot: "intake",
       schema: TurnSchema,
       temperature: 0.4,
       maxTokens: 1500,

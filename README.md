@@ -18,14 +18,14 @@ Needs Node 22.13+ and Python 3.9+.
 
 ```bash
 npm run setup                 # installs Vision and the marketplace template
-cp .env.example .env.local    # Windows: copy .env.example .env.local — then put your Groq key in it
 npm run doctor                # checks this PC and says exactly what to fix
-npm run dev                   # http://localhost:3000
+npm run dev                   # http://localhost:3000, then plug in free AI keys at /parts
 ```
 
 `npm run models` lists the models your Groq key can use.
 
-- **http://localhost:3000/discovery**: the full flow
+- **http://localhost:3000**: the full flow
+- **http://localhost:3000/parts**: plug in AI keys (stored encrypted) and choose which AI runs each position
 - **http://localhost:3000/build/sample**: skips Discovery and builds `lib/sample-blueprint.json`
 
 **No Groq key yet, or working on screens?** Set `VISION_FAKE_AGENTS=1` in `.env.local`. The build agents then skip Groq and use the hand-written reference code, so a build finishes in about 15 seconds with all tests passing. (Discovery always needs a key.)

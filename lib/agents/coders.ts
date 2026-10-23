@@ -106,13 +106,6 @@ async function fakeAgent(input: AgentInput): Promise<AgentOutput> {
   return { files, note: `${input.task.agent}: (fake) finished "${input.task.title}"` };
 }
 
-// Spread frontend tasks across the configured models by task number (T4 → first, T5 → second, …)
-function pickFrontendModel(taskId: string) {
-  const models = config.agentModels.frontend;
-  const n = Number(taskId.match(/\d+/)?.[0] ?? 0);
-  return models[n % models.length];
-}
-
 // ---------- real agents ----------
 
 export async function runCoder(input: AgentInput): Promise<AgentOutput> {
@@ -139,7 +132,7 @@ export async function runCoder(input: AgentInput): Promise<AgentOutput> {
 
   const result = await callLLM({
     label: `${input.task.agent} ${input.task.id}`,
-    model: isBackend ? config.agentModels.backend : pickFrontendModel(input.task.id),
+    slot: isBackend ? "backend" : "frontend",
     system,
     schema: OutputSchema,
     maxTokens: 4096,
