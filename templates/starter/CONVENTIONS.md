@@ -52,8 +52,13 @@ wrote from it. Build exactly those endpoints: same methods, paths, field names a
 
 ## Pages
 
-- Every page's `<head>` has `<link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/theme.css">`, and before
-  your script `<script src="/site.js"></script><script src="/app.js"></script>`; call `renderNav()`.
+- Every page's `<head>` has, in this order: `<script src="https://cdn.tailwindcss.com/3.4.16"></script><script src="/tw.js"></script>`
+  `<link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/theme.css">`. At the end of `<body>`:
+  `<script src="/site.js"></script><script src="/app.js"></script>`, then your script, which calls `renderNav(); renderFooter();`.
+- Tailwind utility classes are available (no reset). Theme colors: `bg-brand text-brand bg-accent bg-card text-muted border-line`,
+  fonts `font-head`, radius `rounded-theme`. Use Tailwind for layout and sections; keep the base classes for forms and buttons.
+- Photos: `https://picsum.photos/seed/<word>/<w>/<h>` (e.g. `https://picsum.photos/seed/laptop/800/500`) always loads; pick a
+  seed word that fits. Icons: small inline SVGs (Lucide/Heroicons style, `stroke="currentColor"`), never emoji as icons.
 - Use the helpers: `api(path, { method, body })` (sends the login token, throws `Error(message)` on failure), `currentUser()`,
   `formatPrice(cents)`, `escapeHtml(text)`. Always pass user content through `escapeHtml` before putting it in HTML.
 - Base classes in style.css: `container`, `grid`, `card`, `muted`, `badge`, `row`, `stack`, `hero`, `error`, `success`,

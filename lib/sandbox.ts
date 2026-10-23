@@ -19,6 +19,7 @@ const PROTECTED = new Set([
   "routes/001_auth.js",
   "public/app.js",
   "public/style.css",
+  "public/tw.js",
   "public/login.html",
 ]);
 

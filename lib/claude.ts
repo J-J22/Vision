@@ -5,7 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Message } from "./llm";
 
 // The positions where a better answer is worth more thinking; everything else answers at low effort for speed
-const DEEP = new Set(["master", "backend", "manager"]);
+const DEEP = new Set(["master", "backend", "manager", "frontend", "theme"]);
 
 const clients = new Map<string, Anthropic>();
 function client(key: string) {

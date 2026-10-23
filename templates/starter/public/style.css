@@ -42,6 +42,9 @@ button:hover, .button:hover { filter: brightness(1.08); }
 button:disabled { opacity: 0.6; cursor: default; }
 button.secondary, .button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--line); }
 .theme-toggle { padding: 6px 10px; line-height: 1; }
+.site-footer { margin-top: 64px; padding: 28px 0; border-top: 1px solid var(--line); background: var(--card); }
+.site-footer .container { padding-top: 0; padding-bottom: 0; justify-content: space-between; }
+.site-footer nav a { color: var(--muted); text-decoration: none; }
 .error { color: var(--danger); }
 .success { color: var(--ok); }
 

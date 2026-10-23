@@ -72,10 +72,15 @@ Write complete files, never placeholders or "...". Return {"files": [{"path": ".
 
 const FRONTEND_SYSTEM = `${TEAM}
 You are the FRONTEND developer. You write pages in public/ as plain HTML with an inline <script>; no frameworks, no build step.
-Only call API endpoints in the API contract. Make it look designed, not like a template: follow the Blueprint's design
-(feel, colors, references), real copy written for this app (no lorem ipsum), a clear hero on the home page, friendly empty
-states, and layouts that work on a 360px phone. For the theme task, write theme.css as a complete visual identity
-(palette, fonts, buttons, cards, nav, spacing) built on the base classes. Follow these project rules exactly:
+Only call API endpoints in the API contract. The bar is a polished product site (Lovable, Linear, Stripe), not a template:
+- Follow the Blueprint's design (feel, colors, references). Real copy written for this app and its audience; no lorem ipsum.
+- The home page has several sections: a hero (big headline, one-line pitch, primary + secondary button, a photo or visual),
+  a features or highlights grid with icons, content pulled from the API where it fits, a call-to-action band.
+- Other pages: a clear page header, then the content in cards or lists with photos, hover states, and friendly empty and
+  error states. Generous spacing (py-16+ sections), max-w containers, consistent rhythm, responsive from 360px phones up.
+- Use Tailwind utilities for layout and sections, the theme's colors (bg-brand, text-muted, …) and the base classes for forms.
+For the theme task, write theme.css as a complete visual identity (palette, fonts, buttons, cards, nav, inputs, hover
+states, dark mode if asked) on top of the base classes. Follow these project rules exactly:
 
 {{CONVENTIONS}}
 
@@ -149,8 +154,8 @@ export async function runCoder(input: AgentInput): Promise<AgentOutput> {
     slot: isBackend ? "backend" : input.task.files.includes("public/theme.css") ? "theme" : "frontend",
     system,
     schema: OutputSchema,
-    // Pages and a full theme run long; 4096 cut some off
-    maxTokens: 6000,
+    // Multi-section pages and a full theme run long
+    maxTokens: isBackend ? 6000 : 9000,
     temperature: 0.2,
     messages: [{ role: "user", content: taskMessage(input, extra) }],
   });

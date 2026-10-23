@@ -45,6 +45,15 @@ try {
   else if (window.THEME_TOGGLE && matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.dataset.theme = "dark";
 } catch {}
 
+// Footer on every page: app name, nav links, year. Pages call renderFooter() after renderNav().
+function renderFooter() {
+  const footer = document.createElement("footer");
+  footer.className = "site-footer";
+  const links = (window.NAV_LINKS ?? []).map((l) => `<a href="${l.href}">${escapeHtml(l.label)}</a>`).join("");
+  footer.innerHTML = `<div class="container row"><strong>${escapeHtml(window.APP_NAME ?? "My app")}</strong><nav class="row">${links}</nav><span class="muted">© ${new Date().getFullYear()}</span></div>`;
+  document.body.append(footer);
+}
+
 function renderNav() {
   const user = currentUser();
   const links = NAV_LINKS.map((l) => `<a href="${l.href}">${escapeHtml(l.label)}</a>`).join("");

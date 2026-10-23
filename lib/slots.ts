@@ -37,7 +37,7 @@ const P = {
   cerebras120: { provider: "cerebras", match: "gpt-oss-120b" },
   cerebrasQwen: { provider: "cerebras", match: /^qwen-?3\.8-27b$/ },
   sambaDeepseek: { provider: "sambanova", match: /^DeepSeek-V3\.2$|^DeepSeek-V3/ },
-  // Paid: first for the master prompt, planner (API contract) and backend; a last-resort spare everywhere else (SPARES)
+  // Paid: first for the master prompt, planner (API contract), backend, theme and pages; a last-resort spare everywhere else (SPARES)
   claude: { provider: "anthropic", match: "claude-opus-5-5" },
 } satisfies Record<string, Pref>;
 
@@ -57,7 +57,7 @@ export const SLOTS: SlotDef[] = [
   { id: "manager", stage: "build", title: "Head manager", job: "Splits the work into tasks", needs: { reasoning: 4 }, typicalPrompt: 3000, prefer: [P.claude, P.geminiFlash, P.groq120, P.cerebras120, P.groq20] },
   { id: "backend", stage: "build", title: "Backend developer", job: "Writes the database and API", needs: { coding: 4 }, typicalPrompt: 4500, prefer: [P.claude, P.kimi, P.deepseekPro, P.sambaDeepseek, P.codestral, P.qwenCoder, P.groqQwen, P.cerebrasQwen] },
   { id: "theme", stage: "build", title: "Designer", job: "Writes the app's theme: colors, fonts, light and dark", needs: { coding: 3 }, typicalPrompt: 2500, prefer: [P.claude, P.geminiFlash, P.codestral, P.groqQwen, P.cerebrasQwen] },
-  { id: "frontend", stage: "build", title: "Frontend developer", job: "Writes the pages", needs: { coding: 3 }, typicalPrompt: 4000, prefer: [P.geminiFlash, P.deepseekFlash, P.sambaDeepseek, P.codestral, P.groqQwen, P.cerebrasQwen, P.groq20] },
+  { id: "frontend", stage: "build", title: "Frontend developer", job: "Writes the pages", needs: { coding: 3 }, typicalPrompt: 4000, prefer: [P.claude, P.geminiFlash, P.deepseekFlash, P.sambaDeepseek, P.codestral, P.groqQwen, P.cerebrasQwen, P.groq20] },
   { id: "qa", stage: "build", title: "QA tester", job: "Explains failed tests and what to fix", needs: { reasoning: 4 }, typicalPrompt: 3000, prefer: [P.groq120, P.cerebras120, P.geminiFlash, P.groq20] },
 ];
 
