@@ -2,7 +2,7 @@
 
 ## First time
 
-1. **Get the code** (you need access to the private repo first):
+1. **Get the code:**
    ```
    git clone https://github.com/J-J22/Vision.git
    cd Vision
