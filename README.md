@@ -1,6 +1,6 @@
 # Vision
 
-**Lovable builds what you typed. Vision builds what you need, and proves it works.**
+**Other builds what you typed. Vision builds what you need, and proves it works.**
 
 Vision is a team of AI agents that takes an app idea from a first conversation to a running, tested React app.
 Before any code is written it interviews you, has a council of different AI models debate your plan, and asks
